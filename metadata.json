@@ -1,0 +1,6 @@
+{
+  "name": "ColorLink - Transformación Digital Pintuco",
+  "description": "Ecosistema inteligente para la gestión integral de recubrimientos y pinturas: del requerimiento del cliente al cálculo técnico, inventario, servicio y garantía de calidad.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
