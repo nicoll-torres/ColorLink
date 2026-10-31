@@ -26,6 +26,7 @@ import {
   AlertCircle,
 } from '../icons';
 import { syncClientToSupabase } from '../supabase';
+import { syncUserToServer } from '../syncService';
 import {
   sendWelcomeEmail,
   buildEmailPlainText,
@@ -271,7 +272,40 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
     };
 
     try {
-      // 1. Guardar en base de datos PostgreSQL (tablas public.clientes y public.usuarios)
+      // 1. Guardar en servidor central multi-dispositivo para que pueda acceder desde cualquier celular o computador
+      await syncUserToServer({
+        ...newUser,
+        identification: fullId,
+        address: fullAddress,
+      }).catch(console.warn);
+
+      // Guardar en almacenamiento local del navegador
+      try {
+        const storedUsers = localStorage.getItem('colorlink_users');
+        const usersList = storedUsers ? JSON.parse(storedUsers) : [];
+        if (!usersList.some((u: any) => u.email.toLowerCase() === newUser.email.toLowerCase())) {
+          usersList.unshift(newUser);
+          localStorage.setItem('colorlink_users', JSON.stringify(usersList));
+        }
+
+        const storedClients = localStorage.getItem('colorlink_clients');
+        const clientsList = storedClients ? JSON.parse(storedClients) : [];
+        if (!clientsList.some((c: any) => (c.email || '').toLowerCase() === newUser.email.toLowerCase())) {
+          clientsList.unshift({
+            id: newUser.id,
+            name: newUser.name,
+            email: newUser.email,
+            phone: newUser.phone,
+            company: newUser.company,
+            city: newUser.city,
+            address: fullAddress,
+            identification: fullId,
+          });
+          localStorage.setItem('colorlink_clients', JSON.stringify(clientsList));
+        }
+      } catch {}
+
+      // 2. Guardar en base de datos PostgreSQL (tablas public.clientes y public.usuarios)
       await syncClientToSupabase({
         id: newUser.id,
         name: newUser.name,

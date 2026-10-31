@@ -426,6 +426,399 @@ app.post('/api/send-email', async (req: Request, res: Response) => {
   }
 });
 
+// =========================================================================
+// MOTOR DE SINCRONIZACIÓN MULTI-DISPOSITIVO Y BASE DE DATOS COMPARTIDA
+// Permite que diferentes celulares, tablets y computadores observen pedidos,
+// clientes y estados en tiempo real sin aislarse en el localStorage.
+// =========================================================================
+
+const DATA_DIR = path.resolve(__dirname, 'data');
+const SHARED_DB_PATH = path.join(DATA_DIR, 'colorlink_shared_db.json');
+
+interface SharedDatabase {
+  requests: any[];
+  users: any[];
+  clients: any[];
+  version: number;
+  lastUpdated: string;
+}
+
+const DEFAULT_DEMO_USERS = [
+  {
+    id: 'usr-adm-1',
+    name: 'Ing. Carlos Restrepo (Director de Operaciones)',
+    email: 'admin@pintuco.com',
+    password: 'pintuco2026',
+    role: 'administrador',
+    company: 'Pintuco S.A. - Sede Principal',
+    phone: '+57 300 882 1100',
+    city: 'Medellín',
+    badgeNumber: 'DIR-PTC-0042',
+  },
+  {
+    id: 'usr-cli-1',
+    name: 'Constructora Bolívar (Arq. Luisa Morales)',
+    email: 'cliente@pintuco.com',
+    password: 'pintuco2026',
+    role: 'cliente',
+    company: 'Constructora Bolívar S.A.',
+    phone: '+57 312 458 9920',
+    city: 'Medellín',
+  },
+  {
+    id: 'usr-cli-bog',
+    name: 'Constructora Capital Bogotá (Ing. David Mendoza)',
+    email: 'clientebogota@pintuco.com',
+    password: 'pintuco2026',
+    role: 'cliente',
+    company: 'Constructora Capital Bogotá S.A.S.',
+    phone: '+57 310 892 4433',
+    city: 'Bogotá D.C.',
+  },
+  {
+    id: 'usr-emp-1',
+    name: 'Javier Gómez (Líder de Bodega y Empaque)',
+    email: 'empacador@pintuco.com',
+    password: 'pintuco2026',
+    role: 'empacador',
+    company: 'CEDI Rionegro · Planta Pintuco',
+    phone: '+57 314 620 7711',
+    city: 'Medellín / Rionegro',
+    badgeNumber: 'BOD-8812',
+  },
+  {
+    id: 'usr-con-1',
+    name: 'Wilson Cañas (Conductor Pintuco Express)',
+    email: 'conductor@pintuco.com',
+    password: 'pintuco2026',
+    role: 'conductor',
+    company: 'Flota Logística Pintuco',
+    phone: '+57 311 754 9988',
+    city: 'Medellín',
+    vehiclePlate: 'WTL-582 (Camión NHR 3.5 Ton)',
+    badgeNumber: 'LOG-TRK-109',
+  },
+];
+
+let memoryDb: SharedDatabase | null = null;
+
+function ensureSharedDatabase(): SharedDatabase {
+  if (memoryDb) return memoryDb;
+
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+
+    if (fs.existsSync(SHARED_DB_PATH)) {
+      const content = fs.readFileSync(SHARED_DB_PATH, 'utf-8');
+      const parsed = JSON.parse(content);
+      if (parsed && Array.isArray(parsed.requests)) {
+        memoryDb = parsed;
+        return memoryDb!;
+      }
+    }
+  } catch (err) {
+    console.warn('[Sync DB] Error al leer archivo de base de datos:', err);
+  }
+
+  // Si no existe, crear con datos base
+  memoryDb = {
+    requests: [
+      {
+        id: 'req-001',
+        requestCode: 'PTC-2026-8841',
+        createdAt: '2026-08-30 08:30',
+        clientName: 'Constructora Bolívar S.A.',
+        clientEmail: 'cliente@pintuco.com',
+        clientPhone: '+57 312 458 9920',
+        deliveryAddress: 'Cra 43A # 18 Sur - 135, Torre 2 El Poblado, Medellín',
+        city: 'Medellín',
+        projectType: 'Comercial',
+        surfaceType: 'fachada_exterior',
+        environment: 'exterior',
+        areaM2: 480,
+        colorName: 'Blanco Lirio Silvestre 01',
+        colorHex: '#f1f5f9',
+        notes: 'Fachada principal edificio corporativo 4 niveles. Requiere alta resistencia a lluvia y hongos.',
+        requiresApplicationService: true,
+        status: 'abastecimiento',
+        chatMessages: [
+          {
+            id: 'msg-init-1',
+            senderRole: 'conductor',
+            senderName: 'Wilson Cañas (Conductor)',
+            message: 'Hola Arq. Luisa Morales. Su pedido PTC-2026-8841 ya está verificado en muelle CEDI Rionegro.',
+            timestamp: '09:10',
+            createdAtIso: '2026-08-30T09:10:00Z',
+          },
+        ],
+        packagingDetails: {
+          packerId: 'usr-emp-1',
+          packerName: 'Javier Gómez (CEDI Rionegro)',
+          packedAt: '2026-08-30 10:15',
+          batchCode: 'LOTE-KOR-2026-B14',
+          checkedSupplies: ['5 Cuñetes Koraza® Máxima Protección (5 Gal)', '3 Galones Koraza® Máxima Protección'],
+          cuñetesPacked: 5,
+          galonesPacked: 3,
+          weightKg: 135.0,
+          qualitySealAttached: true,
+          qrInspectionCode: 'QR-PTC-99201-OK',
+          status: 'empacado_listo',
+          notes: 'Envases sellados herméticamente con precinto de seguridad Pintuco verificado.',
+        },
+        deliveryDetails: {
+          driverId: 'usr-con-1',
+          driverName: 'Wilson Cañas',
+          driverPhone: '+57 311 754 9988',
+          vehiclePlate: 'WTL-582',
+          vehicleType: 'Camión NHR 3.5 Toneladas',
+          currentLocation: 'Muelle 4 CEDI Rionegro - Listo para cargue',
+          routeStatus: 'cargado_en_muelle',
+          deliveryAddress: 'Cra 43A # 18 Sur - 135, El Poblado, Medellín',
+          estimatedArrival: '14:30 Hoy',
+        },
+      },
+    ],
+    users: [...DEFAULT_DEMO_USERS],
+    clients: [
+      {
+        id: 'usr-cli-1',
+        name: 'Constructora Bolívar (Arq. Luisa Morales)',
+        email: 'cliente@pintuco.com',
+        phone: '+57 312 458 9920',
+        company: 'Constructora Bolívar S.A.',
+        city: 'Medellín',
+        identification: '9001234567',
+        address: 'Cra 43A # 18 Sur - 135, Medellín',
+      },
+      {
+        id: 'usr-cli-bog',
+        name: 'Constructora Capital Bogotá (Ing. David Mendoza)',
+        email: 'clientebogota@pintuco.com',
+        phone: '+57 310 892 4433',
+        company: 'Constructora Capital Bogotá S.A.S.',
+        city: 'Bogotá D.C.',
+        identification: '9009876543',
+        address: 'Calle 100 # 19-61, Bogotá',
+      },
+    ],
+    version: 1,
+    lastUpdated: new Date().toISOString(),
+  };
+
+  persistSharedDatabase();
+  return memoryDb;
+}
+
+function persistSharedDatabase() {
+  if (!memoryDb) return;
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(SHARED_DB_PATH, JSON.stringify(memoryDb, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('[Sync DB] Error al guardar en disco:', err);
+  }
+}
+
+// GET /api/sync/state
+app.get('/api/sync/state', (req: Request, res: Response) => {
+  const db = ensureSharedDatabase();
+  return res.json({
+    success: true,
+    requests: db.requests,
+    users: db.users,
+    clients: db.clients,
+    version: db.version,
+    lastUpdated: db.lastUpdated,
+  });
+});
+
+// POST /api/sync/requests
+app.post('/api/sync/requests', (req: Request, res: Response) => {
+  const db = ensureSharedDatabase();
+  const incoming = req.body.request || req.body.requests;
+  if (!incoming) {
+    return res.status(400).json({ error: 'Se requiere el pedido a sincronizar.' });
+  }
+
+  const items: any[] = Array.isArray(incoming) ? incoming : [incoming];
+  items.forEach((item) => {
+    if (!item || !item.id) return;
+    const existingIdx = db.requests.findIndex(
+      (r) => r.id === item.id || (item.requestCode && r.requestCode === item.requestCode)
+    );
+    if (existingIdx >= 0) {
+      db.requests[existingIdx] = { ...db.requests[existingIdx], ...item };
+    } else {
+      db.requests.unshift(item);
+    }
+  });
+
+  db.version += 1;
+  db.lastUpdated = new Date().toISOString();
+  persistSharedDatabase();
+
+  return res.json({
+    success: true,
+    count: db.requests.length,
+    version: db.version,
+    lastUpdated: db.lastUpdated,
+  });
+});
+
+// PUT /api/sync/requests/:id
+app.put('/api/sync/requests/:id', (req: Request, res: Response) => {
+  const db = ensureSharedDatabase();
+  const reqId = req.params.id;
+  const updates = req.body;
+
+  const idx = db.requests.findIndex((r) => r.id === reqId || r.requestCode === reqId);
+  if (idx < 0) {
+    const newReq = { id: reqId, ...updates };
+    db.requests.unshift(newReq);
+    db.version += 1;
+    db.lastUpdated = new Date().toISOString();
+    persistSharedDatabase();
+    return res.json({ success: true, request: newReq, version: db.version });
+  }
+
+  db.requests[idx] = { ...db.requests[idx], ...updates };
+  db.version += 1;
+  db.lastUpdated = new Date().toISOString();
+  persistSharedDatabase();
+
+  return res.json({
+    success: true,
+    request: db.requests[idx],
+    version: db.version,
+  });
+});
+
+// POST /api/sync/requests/:id/chat
+app.post('/api/sync/requests/:id/chat', (req: Request, res: Response) => {
+  const db = ensureSharedDatabase();
+  const reqId = req.params.id;
+  const msg = req.body.message;
+
+  if (!msg || !msg.message) {
+    return res.status(400).json({ error: 'Mensaje requerido' });
+  }
+
+  const idx = db.requests.findIndex((r) => r.id === reqId || r.requestCode === reqId);
+  if (idx >= 0) {
+    const existingMessages = db.requests[idx].chatMessages || [];
+    db.requests[idx].chatMessages = [...existingMessages, msg];
+    db.version += 1;
+    db.lastUpdated = new Date().toISOString();
+    persistSharedDatabase();
+    return res.json({ success: true, chatMessages: db.requests[idx].chatMessages, version: db.version });
+  }
+
+  return res.status(404).json({ error: 'Pedido no encontrado' });
+});
+
+// POST /api/sync/users
+app.post('/api/sync/users', (req: Request, res: Response) => {
+  const db = ensureSharedDatabase();
+  const user = req.body.user;
+  if (!user || !user.email) {
+    return res.status(400).json({ error: 'Datos de usuario requeridos' });
+  }
+
+  const cleanEmail = user.email.toLowerCase().trim();
+  const cleanUser = {
+    ...user,
+    email: cleanEmail,
+  };
+
+  const userIdx = db.users.findIndex((u) => u.email?.toLowerCase() === cleanEmail);
+  if (userIdx >= 0) {
+    db.users[userIdx] = { ...db.users[userIdx], ...cleanUser };
+  } else {
+    db.users.unshift(cleanUser);
+  }
+
+  const clientIdx = db.clients.findIndex((c) => c.email?.toLowerCase() === cleanEmail);
+  const clientData = {
+    id: user.id || `usr-${Date.now()}`,
+    name: user.name,
+    email: cleanEmail,
+    phone: user.phone || '',
+    company: user.company || 'Constructora / Cliente',
+    city: user.city || 'Medellín',
+    identification: user.identification || '',
+    address: user.address || '',
+  };
+
+  if (clientIdx >= 0) {
+    db.clients[clientIdx] = { ...db.clients[clientIdx], ...clientData };
+  } else {
+    db.clients.unshift(clientData);
+  }
+
+  db.version += 1;
+  db.lastUpdated = new Date().toISOString();
+  persistSharedDatabase();
+
+  return res.json({
+    success: true,
+    user: cleanUser,
+    version: db.version,
+  });
+});
+
+// GET /api/sync/users
+app.get('/api/sync/users', (req: Request, res: Response) => {
+  const db = ensureSharedDatabase();
+  return res.json({
+    success: true,
+    users: db.users,
+    clients: db.clients,
+    version: db.version,
+  });
+});
+
+// POST /api/sync/password-reset
+app.post('/api/sync/password-reset', (req: Request, res: Response) => {
+  const db = ensureSharedDatabase();
+  const { email, newPassword } = req.body;
+  if (!email || !newPassword) {
+    return res.status(400).json({ error: 'email y newPassword son requeridos' });
+  }
+
+  const cleanEmail = email.toLowerCase().trim();
+  let updated = false;
+
+  db.users.forEach((u) => {
+    if (u.email?.toLowerCase() === cleanEmail) {
+      u.password = newPassword;
+      updated = true;
+    }
+  });
+
+  db.clients.forEach((c) => {
+    if (c.email?.toLowerCase() === cleanEmail) {
+      c.password = newPassword;
+      updated = true;
+    }
+  });
+
+  if (updated) {
+    db.version += 1;
+    db.lastUpdated = new Date().toISOString();
+    persistSharedDatabase();
+  }
+
+  return res.json({
+    success: true,
+    updated,
+    version: db.version,
+  });
+});
+
 // Comprehensive, deep virtual assistant engine covering EVERYTHING in ColorLink
 function generateComprehensiveAssistantAdvice(query: string, context?: any, inventory?: any[]): string {
   const q = (query || '').toLowerCase();

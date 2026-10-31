@@ -5,6 +5,7 @@ import { isSameCity } from '../utils/cityUtils';
 import { RequestView } from './RequestView';
 import { InvoiceModal } from './InvoiceModal';
 import { OrderChatModal } from './OrderChatModal';
+import { sendChatMessageToServer } from '../syncService';
 import {
   getEmailsForUser,
   openInGmail,
@@ -145,6 +146,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
     if (onUpdateRequest) {
       onUpdateRequest(updatedReq);
     }
+    sendChatMessageToServer(requestId, newMsg).catch(console.warn);
     try {
       window.dispatchEvent(
         new CustomEvent('colorlink-order-chat-updated', {

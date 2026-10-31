@@ -1,0 +1,141 @@
+{
+  "requests": [
+    {
+      "id": "req-001",
+      "requestCode": "PTC-2026-8841",
+      "createdAt": "2026-08-30 08:30",
+      "clientName": "Constructora Bolívar S.A.",
+      "clientEmail": "cliente@pintuco.com",
+      "clientPhone": "+57 312 458 9920",
+      "deliveryAddress": "Cra 43A # 18 Sur - 135, Torre 2 El Poblado, Medellín",
+      "city": "Medellín",
+      "projectType": "Comercial",
+      "surfaceType": "fachada_exterior",
+      "environment": "exterior",
+      "areaM2": 480,
+      "colorName": "Blanco Lirio Silvestre 01",
+      "colorHex": "#f1f5f9",
+      "notes": "Fachada principal edificio corporativo 4 niveles. Requiere alta resistencia a lluvia y hongos.",
+      "requiresApplicationService": true,
+      "status": "abastecimiento",
+      "chatMessages": [
+        {
+          "id": "msg-init-1",
+          "senderRole": "conductor",
+          "senderName": "Wilson Cañas (Conductor)",
+          "message": "Hola Arq. Luisa Morales. Su pedido PTC-2026-8841 ya está verificado en muelle CEDI Rionegro.",
+          "timestamp": "09:10",
+          "createdAtIso": "2026-08-30T09:10:00Z"
+        }
+      ],
+      "packagingDetails": {
+        "packerId": "usr-emp-1",
+        "packerName": "Javier Gómez (CEDI Rionegro)",
+        "packedAt": "2026-08-30 10:15",
+        "batchCode": "LOTE-KOR-2026-B14",
+        "checkedSupplies": [
+          "5 Cuñetes Koraza® Máxima Protección (5 Gal)",
+          "3 Galones Koraza® Máxima Protección"
+        ],
+        "cuñetesPacked": 5,
+        "galonesPacked": 3,
+        "weightKg": 135,
+        "qualitySealAttached": true,
+        "qrInspectionCode": "QR-PTC-99201-OK",
+        "status": "empacado_listo",
+        "notes": "Envases sellados herméticamente con precinto de seguridad Pintuco verificado."
+      },
+      "deliveryDetails": {
+        "driverId": "usr-con-1",
+        "driverName": "Wilson Cañas",
+        "driverPhone": "+57 311 754 9988",
+        "vehiclePlate": "WTL-582",
+        "vehicleType": "Camión NHR 3.5 Toneladas",
+        "currentLocation": "Muelle 4 CEDI Rionegro - Listo para cargue",
+        "routeStatus": "cargado_en_muelle",
+        "deliveryAddress": "Cra 43A # 18 Sur - 135, El Poblado, Medellín",
+        "estimatedArrival": "14:30 Hoy"
+      }
+    }
+  ],
+  "users": [
+    {
+      "id": "usr-adm-1",
+      "name": "Ing. Carlos Restrepo (Director de Operaciones)",
+      "email": "admin@pintuco.com",
+      "password": "pintuco2026",
+      "role": "administrador",
+      "company": "Pintuco S.A. - Sede Principal",
+      "phone": "+57 300 882 1100",
+      "city": "Medellín",
+      "badgeNumber": "DIR-PTC-0042"
+    },
+    {
+      "id": "usr-cli-1",
+      "name": "Constructora Bolívar (Arq. Luisa Morales)",
+      "email": "cliente@pintuco.com",
+      "password": "pintuco2026",
+      "role": "cliente",
+      "company": "Constructora Bolívar S.A.",
+      "phone": "+57 312 458 9920",
+      "city": "Medellín"
+    },
+    {
+      "id": "usr-cli-bog",
+      "name": "Constructora Capital Bogotá (Ing. David Mendoza)",
+      "email": "clientebogota@pintuco.com",
+      "password": "pintuco2026",
+      "role": "cliente",
+      "company": "Constructora Capital Bogotá S.A.S.",
+      "phone": "+57 310 892 4433",
+      "city": "Bogotá D.C."
+    },
+    {
+      "id": "usr-emp-1",
+      "name": "Javier Gómez (Líder de Bodega y Empaque)",
+      "email": "empacador@pintuco.com",
+      "password": "pintuco2026",
+      "role": "empacador",
+      "company": "CEDI Rionegro · Planta Pintuco",
+      "phone": "+57 314 620 7711",
+      "city": "Medellín / Rionegro",
+      "badgeNumber": "BOD-8812"
+    },
+    {
+      "id": "usr-con-1",
+      "name": "Wilson Cañas (Conductor Pintuco Express)",
+      "email": "conductor@pintuco.com",
+      "password": "pintuco2026",
+      "role": "conductor",
+      "company": "Flota Logística Pintuco",
+      "phone": "+57 311 754 9988",
+      "city": "Medellín",
+      "vehiclePlate": "WTL-582 (Camión NHR 3.5 Ton)",
+      "badgeNumber": "LOG-TRK-109"
+    }
+  ],
+  "clients": [
+    {
+      "id": "usr-cli-1",
+      "name": "Constructora Bolívar (Arq. Luisa Morales)",
+      "email": "cliente@pintuco.com",
+      "phone": "+57 312 458 9920",
+      "company": "Constructora Bolívar S.A.",
+      "city": "Medellín",
+      "identification": "9001234567",
+      "address": "Cra 43A # 18 Sur - 135, Medellín"
+    },
+    {
+      "id": "usr-cli-bog",
+      "name": "Constructora Capital Bogotá (Ing. David Mendoza)",
+      "email": "clientebogota@pintuco.com",
+      "phone": "+57 310 892 4433",
+      "company": "Constructora Capital Bogotá S.A.S.",
+      "city": "Bogotá D.C.",
+      "identification": "9009876543",
+      "address": "Calle 100 # 19-61, Bogotá"
+    }
+  ],
+  "version": 2,
+  "lastUpdated": "2026-10-31T13:34:17.280Z"
+}

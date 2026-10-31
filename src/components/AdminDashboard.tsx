@@ -319,6 +319,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       },
     ];
   });
+
+  // Mantener la lista de clientes actualizada automáticamente con los registros remotos
+  useEffect(() => {
+    const refreshClients = () => {
+      try {
+        const stored = localStorage.getItem('colorlink_clients');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setClientsList(parsed);
+          }
+        }
+      } catch {}
+    };
+
+    window.addEventListener('colorlink-client-updated', refreshClients);
+    window.addEventListener('storage', refreshClients);
+    const interval = setInterval(refreshClients, 3000);
+
+    return () => {
+      window.removeEventListener('colorlink-client-updated', refreshClients);
+      window.removeEventListener('storage', refreshClients);
+      clearInterval(interval);
+    };
+  }, []);
+
   const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(false);
   const [clientSearch, setClientSearch] = useState('');
   const [isCreatingClient, setIsCreatingClient] = useState(false);

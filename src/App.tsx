@@ -40,6 +40,7 @@ import {
   getAllEmails,
 } from './emailService';
 import { syncPaintRequestToSupabase, syncAllInventoryToSupabase, getSupabaseConfig } from './supabase';
+import { syncRequestToServer, updateRequestOnServer, startAutoSync } from './syncService';
 import { Sparkles, Sliders, Layers, User, LogOut, ShieldCheck, Boxes, Truck, Lock, UserPlus, Receipt, Database, Mail, CheckCircle2, Home, ShoppingBag, Bell } from './icons';
 
 export default function App() {
@@ -140,6 +141,76 @@ export default function App() {
   // Asegurar persistencia y sincronización con Supabase Cloud al cargar
   useEffect(() => {
     syncAllInventoryToSupabase(inventoryList).catch(console.error);
+  }, []);
+
+  // Sincronización continua multi-dispositivo en tiempo real (Nube Compartida ColorLink)
+  // Garantiza que cualquier cliente o pedido creado en un celular sea visible en tablets y computadores
+  useEffect(() => {
+    const unsub = startAutoSync((serverState) => {
+      if (serverState && Array.isArray(serverState.requests) && serverState.requests.length > 0) {
+        setRequests((localRequests) => {
+          const serverMap = new Map(serverState.requests.map((r) => [r.id, r]));
+
+          // Mezclar: pedidos del servidor + pedidos locales pendientes
+          const merged: PaintRequest[] = [...serverState.requests];
+          localRequests.forEach((locReq) => {
+            if (!serverMap.has(locReq.id)) {
+              merged.push(locReq);
+              // Subir pedido local al servidor para que otros dispositivos lo vean de inmediato
+              syncRequestToServer(locReq).catch(console.warn);
+            }
+          });
+
+          if (JSON.stringify(localRequests) !== JSON.stringify(merged)) {
+            persistRequests(merged);
+            return merged;
+          }
+          return localRequests;
+        });
+
+        // Mantener actualizado el pedido activo si un conductor o empacador cambió su estado desde otro dispositivo
+        setCurrentRequest((curr) => {
+          if (!curr) return serverState.requests[0] || curr;
+          const remoteCurr = serverState.requests.find((r) => r.id === curr.id);
+          if (remoteCurr && JSON.stringify(remoteCurr) !== JSON.stringify(curr)) {
+            return remoteCurr;
+          }
+          return curr;
+        });
+
+        // Sincronizar usuarios registrados entre dispositivos
+        if (Array.isArray(serverState.users) && serverState.users.length > 0) {
+          try {
+            const stored = localStorage.getItem('colorlink_users');
+            const localUsers: UserProfile[] = stored ? JSON.parse(stored) : [];
+            const userEmailSet = new Set(localUsers.map((u) => u.email.toLowerCase()));
+            const newUsers = serverState.users.filter((su) => !userEmailSet.has(su.email.toLowerCase()));
+            if (newUsers.length > 0) {
+              localStorage.setItem('colorlink_users', JSON.stringify([...localUsers, ...newUsers]));
+            }
+          } catch {}
+        }
+
+        // Sincronizar clientes registrados entre dispositivos
+        if (Array.isArray(serverState.clients) && serverState.clients.length > 0) {
+          try {
+            const stored = localStorage.getItem('colorlink_clients');
+            const localClients: any[] = stored ? JSON.parse(stored) : [];
+            const clientEmailSet = new Set(localClients.map((c) => (c.email || '').toLowerCase()));
+            const newClients = serverState.clients.filter((sc) => !clientEmailSet.has((sc.email || '').toLowerCase()));
+            if (newClients.length > 0) {
+              const mergedClients = [...localClients, ...newClients];
+              localStorage.setItem('colorlink_clients', JSON.stringify(mergedClients));
+              window.dispatchEvent(new CustomEvent('colorlink-client-updated', { detail: newClients[0] }));
+            }
+          } catch {}
+        }
+      }
+    }, 2500);
+
+    return () => {
+      unsub();
+    };
   }, []);
 
   // Selección pendiente desde la página de inicio o catálogo
@@ -592,6 +663,8 @@ export default function App() {
     if (currentRequest.id === updated.id) {
       setCurrentRequest(updated);
     }
+    // Sincronizar inmediatamente con servidor central multi-dispositivo
+    updateRequestOnServer(updated.id, updated).catch(console.warn);
     // Sincronizar en segundo plano con Supabase Cloud (12 tablas)
     syncPaintRequestToSupabase(updated);
   };
@@ -877,7 +950,10 @@ export default function App() {
     // 3. Limpiar selección pendiente
     updatePendingRequestData(null);
 
-    // 4. Sincronizar en segundo plano con Supabase Cloud (12 tablas)
+    // 4. Sincronizar de inmediato con el servidor central multi-dispositivo
+    syncRequestToServer(newReq).catch(console.warn);
+
+    // 5. Sincronizar en segundo plano con Supabase Cloud (12 tablas)
     syncPaintRequestToSupabase(newReq);
   };
 

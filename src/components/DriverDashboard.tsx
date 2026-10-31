@@ -4,6 +4,7 @@ import { sendOrderInTransitEmail, sendOrderDeliveredEmail } from '../emailServic
 import { getProductImage } from '../data';
 import { isSameCity } from '../utils/cityUtils';
 import { OrderChatModal } from './OrderChatModal';
+import { sendChatMessageToServer } from '../syncService';
 import {
   Truck,
   MapPin,
@@ -97,6 +98,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
     };
 
     onUpdateRequest(updatedReq);
+    sendChatMessageToServer(requestId, newMsg).catch(console.warn);
     try {
       window.dispatchEvent(
         new CustomEvent('colorlink-order-chat-updated', {

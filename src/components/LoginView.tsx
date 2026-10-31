@@ -18,6 +18,7 @@ import {
 import { getSupabaseClient } from '../supabase';
 import { sendPasswordRecoveryEmail, buildGmailComposeUrl } from '../emailService';
 import { googleSignIn } from '../googleAuth';
+import { fetchServerUsers, syncPasswordResetToServer } from '../syncService';
 
 interface LoginViewProps {
   onLogin: (user: UserProfile) => void;
@@ -176,6 +177,15 @@ export const LoginView: React.FC<LoginViewProps> = ({
       if (inDemo) foundUser = inDemo;
     }
 
+    // Buscar en el servidor central multi-dispositivo
+    if (!foundUser) {
+      try {
+        const serverUsers = await fetchServerUsers();
+        const inServer = serverUsers.find((su) => su.email.toLowerCase() === cleanEmail);
+        if (inServer) foundUser = inServer;
+      } catch {}
+    }
+
     // Buscar en Supabase (public.usuarios o public.clientes) si está disponible
     const client = getSupabaseClient();
     if (!foundUser && client) {
@@ -209,7 +219,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
     const newPasswordCode = `CL-${randomDigits}`;
 
     // 3. Actualizar la contraseña en todas las fuentes de almacenamiento
-    // a) En colorlink_users
+    // a) En servidor central multi-dispositivo para acceso desde cualquier equipo
+    await syncPasswordResetToServer(cleanEmail, newPasswordCode).catch(console.warn);
+
+    // b) En colorlink_users locales
     const updatedUsers = localUsers.map((u) =>
       u.email.toLowerCase() === cleanEmail ? { ...u, password: newPasswordCode } : u
     );
@@ -229,7 +242,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
       localStorage.setItem('colorlink_users', JSON.stringify(updatedUsers));
     } catch {}
 
-    // b) En colorlink_clients si existía
+    // c) En colorlink_clients si existía
     if (storedClients.length > 0) {
       const updatedClients = storedClients.map((c) =>
         (c.email || '').toLowerCase() === cleanEmail ? { ...c, password: newPasswordCode } : c
@@ -239,7 +252,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
       } catch {}
     }
 
-    // c) En Supabase si está disponible
+    // d) En Supabase si está disponible
     if (client) {
       try {
         await client
@@ -344,8 +357,14 @@ export const LoginView: React.FC<LoginViewProps> = ({
       }
     } catch {}
 
-    // Combinar usuarios: staff y clientes tienen prioridad sobre usuarios demo y locales
-    const allUsers = [...staffUsers, ...clientUsers, ...localUsers, ...DEMO_USERS];
+    // Consultar el servidor central multi-dispositivo por si el cliente se registró desde otro celular/PC
+    let serverUsers: UserProfile[] = [];
+    try {
+      serverUsers = await fetchServerUsers();
+    } catch {}
+
+    // Combinar usuarios: staff, clientes del servidor y clientes locales
+    const allUsers = [...staffUsers, ...clientUsers, ...serverUsers, ...localUsers, ...DEMO_USERS];
     let matchedUser = allUsers.find(
       (u) => u.email.toLowerCase() === normalizedEmail
     );
