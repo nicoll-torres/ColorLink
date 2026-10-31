@@ -41,6 +41,7 @@ import {
 } from './emailService';
 import { syncPaintRequestToSupabase, syncAllInventoryToSupabase, getSupabaseConfig } from './supabase';
 import { syncRequestToServer, updateRequestOnServer, startAutoSync } from './syncService';
+import { cloudSyncRequest, cloudUpdateRequest, cloudSubscribeRequests, cloudSubscribeClients } from './cloudSync';
 import { Sparkles, Sliders, Layers, User, LogOut, ShieldCheck, Boxes, Truck, Lock, UserPlus, Receipt, Database, Mail, CheckCircle2, Home, ShoppingBag, Bell } from './icons';
 
 export default function App() {
@@ -210,6 +211,61 @@ export default function App() {
 
     return () => {
       unsub();
+    };
+  }, []);
+
+  // Sincronización en tiempo real directa con Google Cloud Firestore (ideal para Netlify app y cualquier navegador)
+  // Alerta a los computadores y celulares en menos de 500ms usando WebSockets oficiales de Firebase
+  useEffect(() => {
+    const unsubRequests = cloudSubscribeRequests((cloudRequests) => {
+      if (cloudRequests && cloudRequests.length > 0) {
+        setRequests((localRequests) => {
+          const cloudMap = new Map(cloudRequests.map((r) => [r.id, r]));
+          const merged: PaintRequest[] = [...cloudRequests];
+
+          localRequests.forEach((locReq) => {
+            if (!cloudMap.has(locReq.id)) {
+              merged.push(locReq);
+              cloudSyncRequest(locReq).catch(console.warn);
+            }
+          });
+
+          if (JSON.stringify(localRequests) !== JSON.stringify(merged)) {
+            persistRequests(merged);
+            return merged;
+          }
+          return localRequests;
+        });
+
+        setCurrentRequest((curr) => {
+          if (!curr) return cloudRequests[0] || curr;
+          const remoteCurr = cloudRequests.find((r) => r.id === curr.id);
+          if (remoteCurr && JSON.stringify(remoteCurr) !== JSON.stringify(curr)) {
+            return remoteCurr;
+          }
+          return curr;
+        });
+      }
+    });
+
+    const unsubClients = cloudSubscribeClients((cloudClients) => {
+      if (cloudClients && cloudClients.length > 0) {
+        try {
+          const stored = localStorage.getItem('colorlink_clients');
+          const localClients: any[] = stored ? JSON.parse(stored) : [];
+          const emailMap = new Map();
+          localClients.forEach((c) => emailMap.set((c.email || '').toLowerCase(), c));
+          cloudClients.forEach((c) => emailMap.set((c.email || '').toLowerCase(), c));
+          const allMerged = Array.from(emailMap.values());
+          localStorage.setItem('colorlink_clients', JSON.stringify(allMerged));
+          window.dispatchEvent(new CustomEvent('colorlink-client-updated', { detail: cloudClients[0] }));
+        } catch {}
+      }
+    });
+
+    return () => {
+      unsubRequests();
+      unsubClients();
     };
   }, []);
 
@@ -663,7 +719,9 @@ export default function App() {
     if (currentRequest.id === updated.id) {
       setCurrentRequest(updated);
     }
-    // Sincronizar inmediatamente con servidor central multi-dispositivo
+    // Sincronizar inmediatamente con Google Cloud Firestore (para Netlify app y cualquier celular/PC)
+    cloudUpdateRequest(updated.id, updated).catch(console.warn);
+    // Sincronizar con servidor central si está disponible
     updateRequestOnServer(updated.id, updated).catch(console.warn);
     // Sincronizar en segundo plano con Supabase Cloud (12 tablas)
     syncPaintRequestToSupabase(updated);
@@ -950,7 +1008,8 @@ export default function App() {
     // 3. Limpiar selección pendiente
     updatePendingRequestData(null);
 
-    // 4. Sincronizar de inmediato con el servidor central multi-dispositivo
+    // 4. Sincronizar de inmediato con Google Cloud Firestore (Netlify app y multi-dispositivo)
+    cloudSyncRequest(newReq).catch(console.warn);
     syncRequestToServer(newReq).catch(console.warn);
 
     // 5. Sincronizar en segundo plano con Supabase Cloud (12 tablas)

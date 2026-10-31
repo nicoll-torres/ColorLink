@@ -27,6 +27,7 @@ import {
 } from '../icons';
 import { syncClientToSupabase } from '../supabase';
 import { syncUserToServer } from '../syncService';
+import { cloudSyncUser } from '../cloudSync';
 import {
   sendWelcomeEmail,
   buildEmailPlainText,
@@ -173,7 +174,20 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
         city,
       };
 
-      // 1. Guardar en base de datos PostgreSQL / Supabase
+      // 1. Guardar en Google Cloud Firestore y servidor central
+      await cloudSyncUser({
+        ...newUser,
+        identification: fullId,
+        address: fullAddress,
+      }).catch(console.warn);
+
+      await syncUserToServer({
+        ...newUser,
+        identification: fullId,
+        address: fullAddress,
+      }).catch(console.warn);
+
+      // Guardar en base de datos PostgreSQL / Supabase
       await syncClientToSupabase({
         id: newUser.id,
         name: newUser.name,
@@ -272,7 +286,14 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
     };
 
     try {
-      // 1. Guardar en servidor central multi-dispositivo para que pueda acceder desde cualquier celular o computador
+      // 1. Guardar en Google Cloud Firestore para que Netlify app y cualquier celular/computador lo detecte de inmediato
+      await cloudSyncUser({
+        ...newUser,
+        identification: fullId,
+        address: fullAddress,
+      }).catch(console.warn);
+
+      // Guardar en servidor central si está activo
       await syncUserToServer({
         ...newUser,
         identification: fullId,

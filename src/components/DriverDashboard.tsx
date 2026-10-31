@@ -5,6 +5,7 @@ import { getProductImage } from '../data';
 import { isSameCity } from '../utils/cityUtils';
 import { OrderChatModal } from './OrderChatModal';
 import { sendChatMessageToServer } from '../syncService';
+import { cloudSendChatMessage } from '../cloudSync';
 import {
   Truck,
   MapPin,
@@ -98,6 +99,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
     };
 
     onUpdateRequest(updatedReq);
+    cloudSendChatMessage(requestId, newMsg).catch(console.warn);
     sendChatMessageToServer(requestId, newMsg).catch(console.warn);
     try {
       window.dispatchEvent(

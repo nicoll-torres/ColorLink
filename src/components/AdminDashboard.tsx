@@ -20,6 +20,7 @@ import {
   DEFAULT_SUPABASE_KEY,
   normalizeSupabaseUrl,
 } from '../supabase';
+import { cloudSubscribeClients } from '../cloudSync';
 import {
   ShieldCheck,
   Building,
@@ -320,7 +321,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     ];
   });
 
-  // Mantener la lista de clientes actualizada automáticamente con los registros remotos
+  // Mantener la lista de clientes actualizada automáticamente con los registros remotos de Firestore
   useEffect(() => {
     const refreshClients = () => {
       try {
@@ -334,11 +335,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       } catch {}
     };
 
+    const unsubCloud = cloudSubscribeClients((cloudClients) => {
+      if (cloudClients && cloudClients.length > 0) {
+        setClientsList((prev) => {
+          const map = new Map();
+          prev.forEach((p) => map.set((p.email || p.id).toLowerCase(), p));
+          cloudClients.forEach((c) => map.set((c.email || c.id).toLowerCase(), c));
+          return Array.from(map.values());
+        });
+      }
+    });
+
     window.addEventListener('colorlink-client-updated', refreshClients);
     window.addEventListener('storage', refreshClients);
     const interval = setInterval(refreshClients, 3000);
 
     return () => {
+      unsubCloud();
       window.removeEventListener('colorlink-client-updated', refreshClients);
       window.removeEventListener('storage', refreshClients);
       clearInterval(interval);

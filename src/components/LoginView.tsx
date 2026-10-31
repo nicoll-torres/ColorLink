@@ -19,6 +19,7 @@ import { getSupabaseClient } from '../supabase';
 import { sendPasswordRecoveryEmail, buildGmailComposeUrl } from '../emailService';
 import { googleSignIn } from '../googleAuth';
 import { fetchServerUsers, syncPasswordResetToServer } from '../syncService';
+import { cloudFetchUsers, cloudResetPassword } from '../cloudSync';
 
 interface LoginViewProps {
   onLogin: (user: UserProfile) => void;
@@ -177,6 +178,15 @@ export const LoginView: React.FC<LoginViewProps> = ({
       if (inDemo) foundUser = inDemo;
     }
 
+    // Buscar en Google Cloud Firestore (para Netlify app y multi-dispositivo)
+    if (!foundUser) {
+      try {
+        const cloudUsers = await cloudFetchUsers();
+        const inCloud = cloudUsers.find((cu) => cu.email.toLowerCase() === cleanEmail);
+        if (inCloud) foundUser = inCloud;
+      } catch {}
+    }
+
     // Buscar en el servidor central multi-dispositivo
     if (!foundUser) {
       try {
@@ -219,7 +229,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
     const newPasswordCode = `CL-${randomDigits}`;
 
     // 3. Actualizar la contraseña en todas las fuentes de almacenamiento
-    // a) En servidor central multi-dispositivo para acceso desde cualquier equipo
+    // a) En Google Cloud Firestore (Netlify app y celulares/PCs)
+    await cloudResetPassword(cleanEmail, newPasswordCode).catch(console.warn);
+
+    // b) En servidor central multi-dispositivo para acceso desde cualquier equipo
     await syncPasswordResetToServer(cleanEmail, newPasswordCode).catch(console.warn);
 
     // b) En colorlink_users locales
@@ -357,14 +370,20 @@ export const LoginView: React.FC<LoginViewProps> = ({
       }
     } catch {}
 
-    // Consultar el servidor central multi-dispositivo por si el cliente se registró desde otro celular/PC
+    // Consultar Google Cloud Firestore (Netlify app y multi-dispositivo)
+    let cloudUsers: UserProfile[] = [];
+    try {
+      cloudUsers = await cloudFetchUsers();
+    } catch {}
+
+    // Consultar el servidor central si está disponible
     let serverUsers: UserProfile[] = [];
     try {
       serverUsers = await fetchServerUsers();
     } catch {}
 
-    // Combinar usuarios: staff, clientes del servidor y clientes locales
-    const allUsers = [...staffUsers, ...clientUsers, ...serverUsers, ...localUsers, ...DEMO_USERS];
+    // Combinar usuarios: nube Firestore, servidor, staff, clientes locales y demo
+    const allUsers = [...staffUsers, ...clientUsers, ...cloudUsers, ...serverUsers, ...localUsers, ...DEMO_USERS];
     let matchedUser = allUsers.find(
       (u) => u.email.toLowerCase() === normalizedEmail
     );

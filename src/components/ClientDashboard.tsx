@@ -6,6 +6,7 @@ import { RequestView } from './RequestView';
 import { InvoiceModal } from './InvoiceModal';
 import { OrderChatModal } from './OrderChatModal';
 import { sendChatMessageToServer } from '../syncService';
+import { cloudSendChatMessage } from '../cloudSync';
 import {
   getEmailsForUser,
   openInGmail,
@@ -146,6 +147,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
     if (onUpdateRequest) {
       onUpdateRequest(updatedReq);
     }
+    cloudSendChatMessage(requestId, newMsg).catch(console.warn);
     sendChatMessageToServer(requestId, newMsg).catch(console.warn);
     try {
       window.dispatchEvent(
