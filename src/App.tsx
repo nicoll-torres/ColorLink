@@ -44,6 +44,22 @@ import { Sparkles, Sliders, Layers, User, LogOut, ShieldCheck, Boxes, Truck, Loc
 
 export default function App() {
   const [view, setView] = useState<ViewState>('home');
+  const [sharedSyncOk, setSharedSyncOk] = useState<boolean | null>(null);
+  useEffect(() => {
+    const update = (event: Event) => {
+      const { key, data } = (event as CustomEvent).detail;
+      if (key === 'colorlink_paint_requests') setRequests(data);
+      if (key === 'colorlink_pintuco_inventory_v4') setInventoryList(data);
+    };
+    const connection = (event: Event) => setSharedSyncOk((event as CustomEvent).detail);
+    window.addEventListener('colorlink-shared-update', update);
+    window.addEventListener('colorlink-sync-status', connection);
+    return () => {
+      window.removeEventListener('colorlink-shared-update', update);
+      window.removeEventListener('colorlink-sync-status', connection);
+    };
+  }, []);
+
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
   const [supabaseConnected, setSupabaseConnected] = useState<boolean>(() => getSupabaseConfig().connected);
@@ -54,7 +70,7 @@ export default function App() {
       const saved = localStorage.getItem('colorlink_paint_requests');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           const isUnwanted = (txt: string) => {
             const l = (txt || '').toLowerCase();
             return (
@@ -961,6 +977,11 @@ export default function App() {
 
   return (
     <div className="app-root" id="colorlink-root-app">
+      {sharedSyncOk === false && (
+        <div role="status" className="sticky top-0 z-[100] bg-amber-100 px-4 py-3 text-center text-sm text-amber-950">
+          Sin conexión con la base central. Los cambios están pendientes de sincronizar; se reintenta automáticamente.
+        </div>
+      )}
       {/* Si la vista es 'home', renderizamos la página oficial estilo Pintuco */}
       {view === 'home' ? (
         <PintucoHomePage

@@ -248,7 +248,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       const stored = localStorage.getItem('colorlink_staff');
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch {}
     return INITIAL_STAFF;
@@ -278,7 +278,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       const stored = localStorage.getItem('colorlink_clients');
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch {}
     return [
@@ -1142,88 +1142,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  // Cargar clientes desde localStorage y Supabase (PostgreSQL public.clientes)
-  // y mantenerlos actualizados en tiempo real para que los registros hechos
-  // desde cualquier dispositivo aparezcan en todos los paneles abiertos.
+  // The central database updates both lists, including empty lists after deletions.
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem('colorlink_clients');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setClientsList(parsed);
-        }
-      }
-    } catch {}
-
-    let cancelled = false;
-
-    const loadClientsFromCloud = () => {
-      fetchClientsFromSupabase().then((res) => {
-        if (cancelled || !res.success || !res.clients || res.clients.length === 0) return;
-        const mapped = res.clients.map((c: any) => ({
-          id: c.id_cliente || c.id,
-          identification: c.n_identificacion || c.identification,
-          name: c.nombre || c.name,
-          email: c.email,
-          phone: c.telefono || c.phone,
-          address: c.direccion || c.address,
-          city: c.city || 'Medellín',
-          company: c.company || c.nombre || c.name,
-          syncedToSupabase: c.syncedToSupabase ?? true,
-          createdAt: c.created_at || c.createdAt || new Date().toISOString(),
-        }));
-        setClientsList((prev) => {
-          const combined = [...prev];
-          for (const mc of mapped) {
-            const idx = combined.findIndex((p) => p.email?.toLowerCase() === mc.email?.toLowerCase());
-            if (idx >= 0) {
-              // Conservar datos locales (ciudad, empresa) cuando la nube no los trae
-              combined[idx] = {
-                ...combined[idx],
-                ...mc,
-                city: combined[idx].city || mc.city,
-                company: combined[idx].company || mc.company,
-              };
-            } else {
-              combined.unshift(mc);
-            }
-          }
-          combined.sort(
-            (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-          );
-          try {
-            localStorage.setItem('colorlink_clients', JSON.stringify(combined));
-          } catch {}
-          return combined;
-        });
-      });
+    const refresh = (event: Event) => {
+      const { key, data } = (event as CustomEvent).detail;
+      if (key === 'colorlink_clients') setClientsList(data);
+      if (key === 'colorlink_staff') setStaffList(data);
     };
-
-    loadClientsFromCloud();
-
-    // Suscripción en tiempo real a nuevos registros (Supabase Realtime)
-    const sb = getSupabaseClient();
-    const channel = sb
-      ?.channel('admin-clientes-registros')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'clientes' }, () => loadClientsFromCloud())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'usuarios' }, () => loadClientsFromCloud())
-      .subscribe();
-
-    // Respaldo: consulta periódica por si Realtime no está habilitado en las tablas
-    const intervalId = window.setInterval(loadClientsFromCloud, 10000);
-    const handleFocus = () => loadClientsFromCloud();
-    window.addEventListener('focus', handleFocus);
-    window.addEventListener('colorlink-client-updated', handleFocus);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-      window.removeEventListener('focus', handleFocus);
-      window.removeEventListener('colorlink-client-updated', handleFocus);
-      if (sb && channel) sb.removeChannel(channel);
-    };
-  }, [adminTab, supabaseConfig.connected]);
+    window.addEventListener('colorlink-shared-update', refresh);
+    return () => window.removeEventListener('colorlink-shared-update', refresh);
+  }, []);
 
   const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
