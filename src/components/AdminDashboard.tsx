@@ -15,6 +15,7 @@ import {
   updateClientInDatabase,
   fetchClientsFromSupabase,
   fetchTableFromSupabase,
+  getSupabaseClient,
   syncAllInventoryToSupabase,
   SupabaseConfig,
   DEFAULT_SUPABASE_KEY,
@@ -1142,6 +1143,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   // Cargar clientes desde localStorage y Supabase (PostgreSQL public.clientes)
+  // y mantenerlos actualizados en tiempo real para que los registros hechos
+  // desde cualquier dispositivo aparezcan en todos los paneles abiertos.
   useEffect(() => {
     try {
       const stored = localStorage.getItem('colorlink_clients');
@@ -1153,8 +1156,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       }
     } catch {}
 
-    fetchClientsFromSupabase().then((res) => {
-      if (res.success && res.clients && res.clients.length > 0) {
+    let cancelled = false;
+
+    const loadClientsFromCloud = () => {
+      fetchClientsFromSupabase().then((res) => {
+        if (cancelled || !res.success || !res.clients || res.clients.length === 0) return;
         const mapped = res.clients.map((c: any) => ({
           id: c.id_cliente || c.id,
           identification: c.n_identificacion || c.identification,
@@ -1172,15 +1178,51 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           for (const mc of mapped) {
             const idx = combined.findIndex((p) => p.email?.toLowerCase() === mc.email?.toLowerCase());
             if (idx >= 0) {
-              combined[idx] = { ...combined[idx], ...mc };
+              // Conservar datos locales (ciudad, empresa) cuando la nube no los trae
+              combined[idx] = {
+                ...combined[idx],
+                ...mc,
+                city: combined[idx].city || mc.city,
+                company: combined[idx].company || mc.company,
+              };
             } else {
               combined.unshift(mc);
             }
           }
+          combined.sort(
+            (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+          );
+          try {
+            localStorage.setItem('colorlink_clients', JSON.stringify(combined));
+          } catch {}
           return combined;
         });
-      }
-    });
+      });
+    };
+
+    loadClientsFromCloud();
+
+    // Suscripción en tiempo real a nuevos registros (Supabase Realtime)
+    const sb = getSupabaseClient();
+    const channel = sb
+      ?.channel('admin-clientes-registros')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'clientes' }, () => loadClientsFromCloud())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'usuarios' }, () => loadClientsFromCloud())
+      .subscribe();
+
+    // Respaldo: consulta periódica por si Realtime no está habilitado en las tablas
+    const intervalId = window.setInterval(loadClientsFromCloud, 10000);
+    const handleFocus = () => loadClientsFromCloud();
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('colorlink-client-updated', handleFocus);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('colorlink-client-updated', handleFocus);
+      if (sb && channel) sb.removeChannel(channel);
+    };
   }, [adminTab, supabaseConfig.connected]);
 
   const handleCreateClient = async (e: React.FormEvent) => {
