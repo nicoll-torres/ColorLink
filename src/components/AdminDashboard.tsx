@@ -20,8 +20,7 @@ import {
   DEFAULT_SUPABASE_KEY,
   normalizeSupabaseUrl,
 } from '../supabase';
-import { cloudSubscribeClients, cloudSyncUser } from '../cloudSync';
-import { isSameCity } from '../utils/cityUtils';
+import { saveCloudClient, fetchCloudClients } from '../cloudSync';
 import {
   ShieldCheck,
   Building,
@@ -321,44 +320,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       },
     ];
   });
-
-  // Mantener la lista de clientes actualizada automáticamente con los registros remotos de Firestore
-  useEffect(() => {
-    const refreshClients = () => {
-      try {
-        const stored = localStorage.getItem('colorlink_clients');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setClientsList(parsed);
-          }
-        }
-      } catch {}
-    };
-
-    const unsubCloud = cloudSubscribeClients((cloudClients) => {
-      if (cloudClients && cloudClients.length > 0) {
-        setClientsList((prev) => {
-          const map = new Map();
-          prev.forEach((p) => map.set((p.email || p.id).toLowerCase(), p));
-          cloudClients.forEach((c) => map.set((c.email || c.id).toLowerCase(), c));
-          return Array.from(map.values());
-        });
-      }
-    });
-
-    window.addEventListener('colorlink-client-updated', refreshClients);
-    window.addEventListener('storage', refreshClients);
-    const interval = setInterval(refreshClients, 3000);
-
-    return () => {
-      unsubCloud();
-      window.removeEventListener('colorlink-client-updated', refreshClients);
-      window.removeEventListener('storage', refreshClients);
-      clearInterval(interval);
-    };
-  }, []);
-
   const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(false);
   const [clientSearch, setClientSearch] = useState('');
   const [isCreatingClient, setIsCreatingClient] = useState(false);
@@ -579,14 +540,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const alertStockItems = inventoryList.filter((i) => i.status !== 'optimo').length;
 
   const filteredRequests = requests.filter((r) => {
-    const q = (search || '').toLowerCase();
-    const reqCode = (r.requestCode || '').toLowerCase();
-    const cName = (r.clientName || '').toLowerCase();
-    const cCity = (r.city || '').toLowerCase();
-    const matchesSearch = !q || reqCode.includes(q) || cName.includes(q) || cCity.includes(q);
+    const matchesSearch =
+      r.requestCode.toLowerCase().includes(search.toLowerCase()) ||
+      r.clientName.toLowerCase().includes(search.toLowerCase()) ||
+      r.city.toLowerCase().includes(search.toLowerCase());
     if (!matchesSearch) return false;
 
-    if (selectedCity !== 'todos' && !isSameCity(r.city, selectedCity)) return false;
+    if (selectedCity !== 'todos' && r.city !== selectedCity) return false;
     if (selectedStatus !== 'todos' && r.status !== selectedStatus) return false;
     return true;
   });
@@ -980,19 +940,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       updatedAt: new Date().toISOString(),
     };
 
-    // Sincronizar en Google Cloud Firestore para todos los dispositivos
-    cloudSyncUser({
-      id: updatedClient.id,
-      name: updatedClient.name,
-      email: updatedClient.email,
-      phone: updatedClient.phone,
-      company: updatedClient.company,
-      role: 'cliente',
-      city: updatedClient.city,
-      address: updatedClient.address,
-      identification: updatedClient.identification,
-      password: updatedClient.password,
-    }).catch(console.warn);
+    // Sincronizar también con el servidor central de la nube ColorLink
+    saveCloudClient(updatedClient).catch(console.warn);
 
     // 1. Guardar de forma persistente en la Base de Datos (Local y Supabase Cloud)
     let syncSuccess = false;
@@ -1196,7 +1145,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  // Cargar clientes desde localStorage y Supabase (PostgreSQL public.clientes)
+  // Cargar clientes desde la nube (servidor ColorLink), localStorage y Supabase
   useEffect(() => {
     try {
       const stored = localStorage.getItem('colorlink_clients');
@@ -1207,6 +1156,51 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         }
       }
     } catch {}
+
+    // Escuchar nuevos clientes registrados en tiempo real desde otros dispositivos
+    const handleClientUpdated = (e: any) => {
+      const updatedClient = e.detail;
+      if (!updatedClient) return;
+      setClientsList((prev) => {
+        const idx = prev.findIndex(
+          (c) =>
+            c.id === updatedClient.id ||
+            (c.email && updatedClient.email && c.email.toLowerCase() === updatedClient.email.toLowerCase())
+        );
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = { ...next[idx], ...updatedClient };
+          return next;
+        }
+        return [updatedClient, ...prev];
+      });
+    };
+    window.addEventListener('colorlink-client-updated', handleClientUpdated);
+
+    // Consultar clientes en la nube ColorLink
+    fetchCloudClients().then((cloudClients) => {
+      if (Array.isArray(cloudClients) && cloudClients.length > 0) {
+        setClientsList((prev) => {
+          const combined = [...prev];
+          for (const cc of cloudClients) {
+            const idx = combined.findIndex(
+              (p) =>
+                (p.id && p.id === cc.id) ||
+                (p.email && cc.email && p.email.toLowerCase() === cc.email.toLowerCase())
+            );
+            if (idx >= 0) {
+              combined[idx] = { ...combined[idx], ...cc };
+            } else {
+              combined.unshift(cc);
+            }
+          }
+          try {
+            localStorage.setItem('colorlink_clients', JSON.stringify(combined));
+          } catch {}
+          return combined;
+        });
+      }
+    });
 
     fetchClientsFromSupabase().then((res) => {
       if (res.success && res.clients && res.clients.length > 0) {
@@ -1236,6 +1230,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         });
       }
     });
+
+    return () => {
+      window.removeEventListener('colorlink-client-updated', handleClientUpdated);
+    };
   }, [adminTab, supabaseConfig.connected]);
 
   const handleCreateClient = async (e: React.FormEvent) => {
@@ -1245,36 +1243,38 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       return;
     }
 
-    setIsCreatingClient(true);
     const cleanId = (newClientForm.identification || '').replace(/\D/g, '').slice(0, 10);
-    const cleanPhone = (newClientForm.phone || '').replace(/\D/g, '').slice(0, 10);
+    if (newClientForm.identification.trim() && cleanId.length > 10) {
+      setToast({ type: 'error', text: 'El NIT o Cédula no puede superar los 10 dígitos.' });
+      return;
+    }
 
+    const cleanPhone = (newClientForm.phone || '').replace(/\D/g, '').slice(0, 10);
+    if (!cleanPhone) {
+      setToast({ type: 'error', text: 'Por favor ingrese un número de teléfono válido.' });
+      return;
+    }
+    if (cleanPhone.length > 10) {
+      setToast({ type: 'error', text: 'El teléfono no puede superar los 10 dígitos.' });
+      return;
+    }
+
+    setIsCreatingClient(true);
     const newClientObj = {
       id: 'cli-' + Math.random().toString(36).substring(2, 7),
-      identification: cleanId || `${Math.floor(Math.random() * 900000000 + 100000000)}`,
+      identification: cleanId || `NIT-${Math.floor(Math.random() * 9000000 + 1000000)}`,
       name: newClientForm.name.trim(),
       email: newClientForm.email.trim().toLowerCase(),
-      phone: cleanPhone || newClientForm.phone.trim(),
+      phone: cleanPhone,
       address: newClientForm.address.trim() || `${newClientForm.city}, Colombia`,
       city: newClientForm.city,
       company: newClientForm.company.trim() || newClientForm.name.trim(),
       createdAt: new Date().toISOString(),
-      syncedToSupabase: false,
+      syncedToSupabase: true,
     };
 
-    // Sincronizar de inmediato en Google Cloud Firestore para todos los celulares y computadores
-    cloudSyncUser({
-      id: newClientObj.id,
-      name: newClientObj.name,
-      email: newClientObj.email,
-      password: 'cliente123',
-      phone: newClientObj.phone,
-      company: newClientObj.company,
-      role: 'cliente',
-      city: newClientObj.city,
-      address: newClientObj.address,
-      identification: newClientObj.identification,
-    }).catch(console.warn);
+    // Sincronizar en la nube central ColorLink para todos los dispositivos
+    await saveCloudClient(newClientObj).catch(console.warn);
 
     // 1. Guardar en Supabase Cloud (tablas clientes y usuarios)
     let syncNotice = '';
@@ -1294,7 +1294,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       if (syncRes.success) {
         newClientObj.syncedToSupabase = true;
-        syncNotice = ' ¡Guardado y sincronizado con éxito en Supabase Cloud!';
+        syncNotice = ' ¡Guardado en la nube y sincronizado en Supabase!';
       } else {
         syncNotice = ` (${syncRes.message})`;
       }
@@ -4168,7 +4168,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    NIT o Cédula (máx. 10 dígitos) <span className="text-red-500">*</span>
+                    NIT o Cédula (Hasta 10 dígitos) <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -4176,7 +4176,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     inputMode="numeric"
                     pattern="[0-9]*"
                     maxLength={10}
-                    placeholder="Ej: 1032456789 (hasta 10 dígitos)"
+                    placeholder="Ej: 1098765432 o 43123456"
                     value={newClientForm.identification}
                     onChange={(e) =>
                       setNewClientForm({
@@ -4184,9 +4184,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         identification: e.target.value.replace(/\D/g, '').slice(0, 10),
                       })
                     }
+                    onKeyDown={(e) => {
+                      if (
+                        ['Backspace', 'Tab', 'Enter', 'Delete', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key) ||
+                        e.ctrlKey || e.metaKey
+                      ) {
+                        return;
+                      }
+                      if (!/^[0-9]$/.test(e.key) || newClientForm.identification.length >= 10) {
+                        e.preventDefault();
+                      }
+                    }}
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl font-mono focus:ring-1 focus:ring-blue-500 focus:outline-hidden"
                   />
-                  <span className="text-[10px] text-slate-500 mt-0.5 block">Solo números, máximo 10 dígitos</span>
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">Solo datos numéricos (hasta 10 dígitos, funciona con menos)</span>
                 </div>
 
                 <div>
@@ -4218,7 +4229,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Teléfono / Celular (máx. 10 dígitos) <span className="text-red-500">*</span>
+                    Teléfono / Celular (Hasta 10 dígitos) <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="tel"
@@ -4226,7 +4237,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     inputMode="numeric"
                     pattern="[0-9]*"
                     maxLength={10}
-                    placeholder="Ej: 3101234567 (hasta 10 dígitos)"
+                    placeholder="Ej: 3101234567"
                     value={newClientForm.phone}
                     onChange={(e) =>
                       setNewClientForm({
@@ -4234,9 +4245,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         phone: e.target.value.replace(/\D/g, '').slice(0, 10),
                       })
                     }
+                    onKeyDown={(e) => {
+                      if (
+                        ['Backspace', 'Tab', 'Enter', 'Delete', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key) ||
+                        e.ctrlKey || e.metaKey
+                      ) {
+                        return;
+                      }
+                      if (!/^[0-9]$/.test(e.key) || newClientForm.phone.length >= 10) {
+                        e.preventDefault();
+                      }
+                    }}
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl font-mono focus:ring-1 focus:ring-blue-500 focus:outline-hidden"
                   />
-                  <span className="text-[10px] text-slate-500 mt-0.5 block">Solo números, máximo 10 dígitos</span>
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">Solo datos numéricos (hasta 10 dígitos)</span>
                 </div>
 
                 <div>
@@ -4643,7 +4665,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    NIT o Cédula (máx. 10 dígitos) <span className="text-red-500">*</span>
+                    NIT o Cédula (Hasta 10 dígitos) <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -4660,7 +4682,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     }
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl font-mono focus:ring-1 focus:ring-blue-500 focus:outline-hidden"
                   />
-                  <span className="text-[10px] text-slate-500 mt-0.5 block">Solo números, máximo 10 dígitos</span>
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">Solo datos numéricos (hasta 10 dígitos, funciona con menos)</span>
                 </div>
 
                 <div>
@@ -4690,7 +4712,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Teléfono / Celular (máx. 10 dígitos) <span className="text-red-500">*</span>
+                    Teléfono / Celular (Hasta 10 dígitos) <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="tel"
@@ -4707,7 +4729,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     }
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl font-medium focus:ring-1 focus:ring-blue-500 focus:outline-hidden"
                   />
-                  <span className="text-[10px] text-slate-500 mt-0.5 block">Solo números, máximo 10 dígitos</span>
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">Solo datos numéricos (hasta 10 dígitos)</span>
                 </div>
 
                 <div>

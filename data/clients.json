@@ -1,0 +1,44 @@
+[
+  {
+    "id": "cli-01",
+    "identification": "9005678901",
+    "name": "Constructora Bolívar S.A.",
+    "email": "cliente@pintuco.com",
+    "phone": "3201122334",
+    "address": "Calle 98 #11-20, Bogotá D.C.",
+    "company": "Constructora Bolívar S.A.",
+    "city": "Bogotá D.C.",
+    "password": "cliente123",
+    "syncedToSupabase": true,
+    "createdAt": "2026-03-01T10:00:00.000Z",
+    "updatedAt": "2026-03-01T10:00:00.000Z"
+  },
+  {
+    "id": "cli-02",
+    "identification": "9014432105",
+    "name": "Inversiones & Diseños SAS",
+    "email": "proyectos@inversionesdiseno.com",
+    "phone": "3145566778",
+    "address": "Cra 43A # 18 Sur-35, El Poblado",
+    "company": "Inversiones & Diseños SAS",
+    "city": "Medellín",
+    "password": "cliente123",
+    "syncedToSupabase": true,
+    "createdAt": "2026-03-05T14:30:00.000Z",
+    "updatedAt": "2026-03-05T14:30:00.000Z"
+  },
+  {
+    "id": "cli-03",
+    "identification": "1098765432",
+    "name": "Luisa Fernanda Gómez",
+    "email": "luisa.gomez@gmail.com",
+    "phone": "3104567890",
+    "address": "Av. Las Palmas Km 5, Medellín",
+    "company": "Residencia Particular Las Palmas",
+    "city": "Medellín",
+    "password": "cliente123",
+    "syncedToSupabase": true,
+    "createdAt": "2026-03-10T09:15:00.000Z",
+    "updatedAt": "2026-03-10T09:15:00.000Z"
+  }
+]

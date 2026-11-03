@@ -30,6 +30,12 @@ interface MainNavbarProps {
   onOpenSupabaseModal?: () => void;
   onOpenEmailInbox?: () => void;
   emailUnreadCount?: number;
+  cloudSyncState?: {
+    connected: boolean;
+    activeDevices: number;
+    lastSyncTimestamp: number;
+    sseActive: boolean;
+  };
 }
 
 export const MainNavbar: React.FC<MainNavbarProps> = ({
@@ -49,6 +55,7 @@ export const MainNavbar: React.FC<MainNavbarProps> = ({
   onOpenSupabaseModal,
   onOpenEmailInbox,
   emailUnreadCount = 0,
+  cloudSyncState,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -180,6 +187,19 @@ export const MainNavbar: React.FC<MainNavbarProps> = ({
             [ Iniciar Sesión ]   [ 🛒 Mi Carrito (0) ]
             ========================================================= */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          {/* Indicador Multi-Dispositivo en Vivo */}
+          <div
+            className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 border border-emerald-200 text-emerald-800 shadow-2xs select-none"
+            title="Sincronización Multi-Dispositivo Activa: Los pedidos, clientes e inventario se actualizan automáticamente en tiempo real entre todos los teléfonos, tablets y computadores conectados."
+          >
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
+            </span>
+            <span className="hidden xl:inline">Nube en vivo:</span>
+            <span>Multi-dispositivo</span>
+          </div>
+
           {/* Notificaciones y Correos Oficiales (Disponible para personal administrativo y de logística) */}
           {currentUser && currentUser.role !== 'cliente' && onOpenEmailInbox && (
             <button

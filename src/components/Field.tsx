@@ -27,6 +27,7 @@ interface FieldProps {
   pattern?: string;
   maxLength?: number;
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void;
+  onPaste?: (e: React.ClipboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
 }
 
 export const Field: React.FC<FieldProps> = ({
@@ -50,6 +51,7 @@ export const Field: React.FC<FieldProps> = ({
   pattern,
   maxLength,
   onKeyDown,
+  onPaste,
 }) => {
   const [showPassword, setShowPassword] = useState(false);
   const isPassword = type === 'password';
@@ -118,6 +120,7 @@ export const Field: React.FC<FieldProps> = ({
             pattern={pattern}
             maxLength={maxLength}
             onKeyDown={onKeyDown}
+            onPaste={onPaste}
           />
         )}
 

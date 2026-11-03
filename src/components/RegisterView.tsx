@@ -26,8 +26,7 @@ import {
   AlertCircle,
 } from '../icons';
 import { syncClientToSupabase } from '../supabase';
-import { syncUserToServer } from '../syncService';
-import { cloudSyncUser } from '../cloudSync';
+import { saveCloudClient } from '../cloudSync';
 import {
   sendWelcomeEmail,
   buildEmailPlainText,
@@ -174,20 +173,21 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
         city,
       };
 
-      // 1. Guardar en Google Cloud Firestore y servidor central
-      await cloudSyncUser({
-        ...newUser,
-        identification: fullId,
+      // 1. Guardar en la nube multi-dispositivo (servidor ColorLink)
+      await saveCloudClient({
+        id: newUser.id,
+        name: newUser.name,
+        email: newUser.email,
+        password: newUser.password,
+        phone: newUser.phone,
         address: fullAddress,
-      }).catch(console.warn);
-
-      await syncUserToServer({
-        ...newUser,
+        city: newUser.city,
         identification: fullId,
-        address: fullAddress,
-      }).catch(console.warn);
+        role: 'cliente',
+        company: newUser.company,
+      });
 
-      // Guardar en base de datos PostgreSQL / Supabase
+      // 2. Guardar en base de datos PostgreSQL / Supabase
       await syncClientToSupabase({
         id: newUser.id,
         name: newUser.name,
@@ -201,7 +201,7 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
         company: newUser.company,
       });
 
-      // 2. Despachar correo oficial de bienvenida por Gmail API con el token recién obtenido
+      // 3. Despachar correo oficial de bienvenida por Gmail API con el token recién obtenido
       const sentWelcome = await sendWelcomeEmail(newUser, {
         identification: fullId,
         address: fullAddress,
@@ -247,15 +247,27 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
       return;
     }
 
-    const cleanId = identification.trim().replace(/\D/g, '');
-    if (!cleanId || cleanId.length > 10) {
-      setError('El NIT o Cédula de Ciudadanía debe contener solo números y máximo 10 dígitos.');
+    const cleanId = identification.trim().replace(/\D/g, '').slice(0, 10);
+    if (!cleanId) {
+      setError('Por favor ingrese el NIT o Cédula de Ciudadanía.');
+      return;
+    }
+    if (cleanId.length > 10) {
+      setError('La Cédula o NIT no puede superar los 10 dígitos.');
       return;
     }
 
-    const cleanPhone = phone.trim().replace(/\D/g, '');
-    if (!cleanPhone || cleanPhone.length > 10) {
-      setError('El teléfono / WhatsApp de contacto debe contener solo números y máximo 10 dígitos.');
+    const cleanPhone = phone.trim().replace(/\D/g, '').slice(0, 10);
+    if (!cleanPhone) {
+      setError('Por favor ingrese el teléfono o WhatsApp de contacto.');
+      return;
+    }
+    if (cleanPhone.length > 10) {
+      setError('El teléfono no puede superar los 10 dígitos.');
+      return;
+    }
+    if (cleanPhone.length < 7) {
+      setError('El teléfono debe tener al menos 7 y hasta 10 dígitos numéricos.');
       return;
     }
 
@@ -286,45 +298,19 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
     };
 
     try {
-      // 1. Guardar en Google Cloud Firestore para que Netlify app y cualquier celular/computador lo detecte de inmediato
-      await cloudSyncUser({
-        ...newUser,
-        identification: fullId,
+      // 1. Guardar en la nube multi-dispositivo ColorLink (visible inmediatamente en otros dispositivos)
+      await saveCloudClient({
+        id: newUser.id,
+        name: newUser.name,
+        email: newUser.email,
+        password: newUser.password,
+        phone: newUser.phone,
         address: fullAddress,
-      }).catch(console.warn);
-
-      // Guardar en servidor central si está activo
-      await syncUserToServer({
-        ...newUser,
+        city: newUser.city,
         identification: fullId,
-        address: fullAddress,
-      }).catch(console.warn);
-
-      // Guardar en almacenamiento local del navegador
-      try {
-        const storedUsers = localStorage.getItem('colorlink_users');
-        const usersList = storedUsers ? JSON.parse(storedUsers) : [];
-        if (!usersList.some((u: any) => u.email.toLowerCase() === newUser.email.toLowerCase())) {
-          usersList.unshift(newUser);
-          localStorage.setItem('colorlink_users', JSON.stringify(usersList));
-        }
-
-        const storedClients = localStorage.getItem('colorlink_clients');
-        const clientsList = storedClients ? JSON.parse(storedClients) : [];
-        if (!clientsList.some((c: any) => (c.email || '').toLowerCase() === newUser.email.toLowerCase())) {
-          clientsList.unshift({
-            id: newUser.id,
-            name: newUser.name,
-            email: newUser.email,
-            phone: newUser.phone,
-            company: newUser.company,
-            city: newUser.city,
-            address: fullAddress,
-            identification: fullId,
-          });
-          localStorage.setItem('colorlink_clients', JSON.stringify(clientsList));
-        }
-      } catch {}
+        role: 'cliente',
+        company: newUser.company,
+      });
 
       // 2. Guardar en base de datos PostgreSQL (tablas public.clientes y public.usuarios)
       await syncClientToSupabase({
@@ -340,14 +326,14 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
         company: newUser.company,
       });
 
-      // 2. Disparar evento para actualización inmediata en la ventana actual
-      try {
-        window.dispatchEvent(
-          new CustomEvent('colorlink-client-updated', {
-            detail: { ...newUser, identification: fullId, address: fullAddress },
-          })
-        );
-      } catch {}
+      // 2. Si el correo ingresado es de Gmail o no hay token de Google activo, intentar conectar Google para despacho automático
+      if (!isGoogleConnected()) {
+        try {
+          await ensureGoogleAccessToken();
+        } catch (gErr) {
+          console.info('Autorización de Google omitida en envío de formulario:', gErr);
+        }
+      }
 
       // 3. ENVIAR CORREO OFICIAL AL CLIENTE (con soporte para Gmail API o Webmail directo)
       const sentWelcome = await sendWelcomeEmail(newUser, {
@@ -684,7 +670,7 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
           />
           <Field
             id="register-id"
-            label="NIT o Cédula de Ciudadanía (máx. 10 dígitos) *"
+            label="NIT o Cédula de Ciudadanía (Hasta 10 dígitos) *"
             value={identification}
             onChange={(e) => {
               const numericOnly = e.target.value.replace(/\D/g, '').slice(0, 10);
@@ -697,16 +683,22 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
               ) {
                 return;
               }
-              if (!/^[0-9]$/.test(e.key)) {
+              if (!/^[0-9]$/.test(e.key) || identification.length >= 10) {
                 e.preventDefault();
               }
+            }}
+            onPaste={(e) => {
+              e.preventDefault();
+              const pasted = e.clipboardData.getData('text');
+              const numericOnly = pasted.replace(/\D/g, '').slice(0, 10);
+              setIdentification(numericOnly);
             }}
             inputMode="numeric"
             pattern="[0-9]*"
             maxLength={10}
-            placeholder="Ej. 1098765432 (hasta 10 dígitos)"
+            placeholder="Ej. 1098765432 o 43123456"
             icon={<ShieldCheck className="w-4 h-4" />}
-            hint="Solo números, máximo 10 dígitos (puedes ingresar menos)"
+            hint="Solo datos numéricos (hasta 10 dígitos, si pones menos también funciona)"
             required
           />
         </div>
@@ -725,7 +717,7 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
 
           <Field
             id="register-phone"
-            label="Teléfono / WhatsApp de Contacto (máx. 10 dígitos) *"
+            label="Teléfono / WhatsApp de Contacto (Hasta 10 dígitos) *"
             type="tel"
             value={phone}
             onChange={(e) => {
@@ -739,16 +731,22 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
               ) {
                 return;
               }
-              if (!/^[0-9]$/.test(e.key)) {
+              if (!/^[0-9]$/.test(e.key) || phone.length >= 10) {
                 e.preventDefault();
               }
+            }}
+            onPaste={(e) => {
+              e.preventDefault();
+              const pasted = e.clipboardData.getData('text');
+              const numericOnly = pasted.replace(/\D/g, '').slice(0, 10);
+              setPhone(numericOnly);
             }}
             inputMode="numeric"
             pattern="[0-9]*"
             maxLength={10}
             placeholder="Ej. 3001234567 (hasta 10 dígitos)"
             icon={<Phone className="w-4 h-4" />}
-            hint="Solo números, máximo 10 dígitos (puedes ingresar menos)"
+            hint="Solo datos numéricos (hasta 10 dígitos)"
             required
           />
         </div>

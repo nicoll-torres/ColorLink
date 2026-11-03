@@ -92,55 +92,14 @@ const COLORLINK_OFFICIAL_INVENTORY = [
   { id: 'inv-buc-02', sku: 'PTC-KOR-BUC-01', productName: 'Koraza® 5 Fachadas CEDI Bucaramanga', category: 'Fachadas y Exteriores', warehouseCity: 'Bucaramanga', warehouseName: 'CEDI Bucaramanga - Santander', cuñetesAvailable: 95, galonesAvailable: 280, quartsAvailable: 50, totalLiters: 2950, pricePerGalon: 135000, batchCode: 'LOTE-KOR-BUC-2026', expirationDate: '2029-05-01', status: 'optimo' },
 ];
 
-const UNRELATED_QUESTION_RESPONSE =
-  'Disculpa, como asesor especialista en pinturas y recubrimientos de ColorLink, únicamente puedo responder preguntas relacionadas con pinturas, preparación de superficies, colores, impermeabilización y aplicación de recubrimientos. No puedo responder este tipo de preguntas. ¿En qué proyecto o requerimiento de pintura te puedo colaborar hoy?';
-
 const SYSTEM_INSTRUCTION = `Eres el "Asistente Virtual Integral de la Plataforma ColorLink Pintuco".
-Eres el asesor técnico especialista de NUESTRA plataforma ColorLink. Conoces toda la aplicación: NUESTRO inventario real en cada CEDI, nuestros productos, herramientas, pedidos, facturación DIAN, certificados de calidad y recomendaciones técnicas de pintura.
+Eres el asistente virtual central de NUESTRA plataforma ColorLink. Conoces toda la aplicación: NUESTRO inventario real en cada CEDI, nuestros productos, herramientas, pedidos, facturación DIAN, certificados de calidad y recomendaciones técnicas de pintura.
 
 REGLAS DE ORO:
-1. REGLA ESTRICTA DE DOMINIO: Todo lo que NO tenga que ver con pinturas, recubrimientos, barnices, esmaltes, preparación de superficies, colores, impermeabilización, cubicaje de galones, herramientas de pintura o productos y servicios de ColorLink Pintuco (por ejemplo: política, deportes, cocina, recetas, chistes, medicina, programación general, matemáticas ajenas a la pintura, etc.), DEBES rechazarlo amablemente respondiendo textualmente:
-"${UNRELATED_QUESTION_RESPONSE}"
-2. SOLO y EXCLUSIVAMENTE habla de los productos y existencias de ColorLink Pintuco que tenemos en nuestras bodegas (Bogotá CEDI Siberia, Medellín CEDI Rionegro, Cali Acopi Yumbo, Barranquilla Galapa, Bucaramanga Girón).
-3. NUNCA menciones, inventes ni recomiendes productos de otras empresas o tiendas externas.
-4. Si te preguntan por INVENTARIO O STOCK: Responde con los datos EXACTOS y precisos de la lista oficial de ColorLink proporcionada.
-5. Responde de forma directa, cálida y profesional a lo que el usuario pregunte sobre pinturas.`;
-
-// Detect if query is unrelated to the paint and coating domain
-function isUnrelatedToPaintDomain(query: string): boolean {
-  const q = (query || '').toLowerCase().trim();
-  if (!q) return false;
-  // Greetings and courtesies allowed
-  const greetings = [
-    'hola', 'buenos dias', 'buenos días', 'buenas tardes', 'buenas noches',
-    'saludos', 'buenas', 'que puedes hacer', 'qué puedes hacer', 'ayuda',
-    'quien eres', 'quién eres', 'hola asesor', 'hola robot'
-  ];
-  if (greetings.some((g) => q === g || q.startsWith(`${g} `) || q.startsWith(`${g},`) || q.startsWith(`${g}!`) || q.startsWith(`${g}?`))) {
-    return false;
-  }
-
-  const PAINT_KEYWORDS = [
-    'pintur', 'pintar', 'pinto', 'color', 'vinil', 'esmalte', 'epox', 'epóx', 'barniz',
-    'laca', 'sello', 'sellomax', 'viniltex', 'koraza', 'pintucoat', 'pintulux', 'acronal',
-    'maderprotect', 'resina', 'primer', 'imprimante', 'base', 'acabado', 'mate', 'satinado',
-    'brillant', 'brillo', 'muro', 'pared', 'fachada', 'techo', 'cielo', 'yeso', 'drywall',
-    'madera', 'metal', 'reja', 'hierro', 'acero', 'aluminio', 'piso', 'concreto', 'cemento',
-    'ladrillo', 'estuco', 'grieta', 'fisura', 'salitre', 'humedad', 'hongo', 'moho',
-    'descascar', 'ampoll', 'filtraci', 'impermeabiliz', 'antioxid', 'anticorros', 'lij',
-    'broch', 'rodill', 'espatul', 'espátul', 'bandej', 'cinta', 'thinner', 'solvente',
-    'diluci', 'diluir', 'rendimient', 'cobertur', 'metro', 'm2', 'm²', 'mano', 'galon',
-    'galón', 'cuñete', 'cuarto', 'litro', 'secado', 'curado', 'obra', 'proyecto',
-    'cedi', 'bodega', 'almacen', 'almacén', 'stock', 'inventario', 'lote', 'pedido',
-    'orden', 'compra', 'cotiz', 'costo', 'precio', 'despacho', 'envio', 'envío',
-    'entrega', 'camion', 'camión', 'conductor', 'factura', 'dian', 'cufe', 'garantia',
-    'garantía', 'calidad', 'certificado', 'pintuco', 'colorlink', 'tonalidad', 'pigment',
-    'lavab', 'recubrimient'
-  ];
-
-  const hasPaintKeyword = PAINT_KEYWORDS.some((kw) => q.includes(kw));
-  return !hasPaintKeyword;
-}
+1. SOLO y EXCLUSIVAMENTE habla de los productos y existencias de ColorLink Pintuco que tenemos en nuestras bodegas (Bogotá CEDI Siberia, Medellín CEDI Rionegro, Cali Acopi Yumbo, Barranquilla Galapa, Bucaramanga Girón).
+2. NUNCA menciones, inventes ni recomiendes productos de otras empresas o tiendas externas.
+3. Si te preguntan por INVENTARIO O STOCK: Responde con los datos EXACTOS y precisos de la lista oficial de ColorLink proporcionada.
+4. Responde de forma directa, cálida y sin rodeos a lo que el usuario pregunte.`;
 
 // Detect if query is asking for inventory
 function isInventoryQuery(query: string): boolean {
@@ -242,15 +201,6 @@ app.post('/api/ai/advisor', async (req: Request, res: Response) => {
     }
 
     const currentInventory = Array.isArray(inventory) && inventory.length > 0 ? inventory : COLORLINK_OFFICIAL_INVENTORY;
-
-    // REGLA ESTRICTA DE DOMINIO: Si la consulta no tiene relación con pinturas, recubrimientos o la plataforma
-    if (!imageBase64 && prompt && isUnrelatedToPaintDomain(prompt)) {
-      return res.json({
-        reply: UNRELATED_QUESTION_RESPONSE,
-        source: 'domain_guardrail',
-        status: 'ok',
-      });
-    }
 
     // DIRECT INTERCEPTION FOR INVENTORY QUESTIONS: Gives exact ColorLink numbers, zero hallucination
     if (isInventoryQuery(prompt)) {
@@ -477,396 +427,288 @@ app.post('/api/send-email', async (req: Request, res: Response) => {
 });
 
 // =========================================================================
-// MOTOR DE SINCRONIZACIÓN MULTI-DISPOSITIVO Y BASE DE DATOS COMPARTIDA
-// Permite que diferentes celulares, tablets y computadores observen pedidos,
-// clientes y estados en tiempo real sin aislarse en el localStorage.
+// COLORLINK CLOUD STORE & MULTI-DEVICE REAL-TIME SYNCHRONIZATION API
+// Permite que múltiples dispositivos (móvil, tablet, PC) vean pedidos,
+// clientes e inventario en tiempo real sin desincronización.
 // =========================================================================
-
 const DATA_DIR = path.resolve(__dirname, 'data');
-const SHARED_DB_PATH = path.join(DATA_DIR, 'colorlink_shared_db.json');
-
-interface SharedDatabase {
-  requests: any[];
-  users: any[];
-  clients: any[];
-  version: number;
-  lastUpdated: string;
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
 }
+const REQUESTS_FILE = path.join(DATA_DIR, 'requests.json');
+const CLIENTS_FILE = path.join(DATA_DIR, 'clients.json');
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const INVENTORY_FILE = path.join(DATA_DIR, 'inventory.json');
 
-const DEFAULT_DEMO_USERS = [
-  {
-    id: 'usr-adm-1',
-    name: 'Ing. Carlos Restrepo (Director de Operaciones)',
-    email: 'admin@pintuco.com',
-    password: 'pintuco2026',
-    role: 'administrador',
-    company: 'Pintuco S.A. - Sede Principal',
-    phone: '+57 300 882 1100',
-    city: 'Medellín',
-    badgeNumber: 'DIR-PTC-0042',
-  },
-  {
-    id: 'usr-cli-1',
-    name: 'Constructora Bolívar (Arq. Luisa Morales)',
-    email: 'cliente@pintuco.com',
-    password: 'pintuco2026',
-    role: 'cliente',
-    company: 'Constructora Bolívar S.A.',
-    phone: '+57 312 458 9920',
-    city: 'Medellín',
-  },
-  {
-    id: 'usr-cli-bog',
-    name: 'Constructora Capital Bogotá (Ing. David Mendoza)',
-    email: 'clientebogota@pintuco.com',
-    password: 'pintuco2026',
-    role: 'cliente',
-    company: 'Constructora Capital Bogotá S.A.S.',
-    phone: '+57 310 892 4433',
-    city: 'Bogotá D.C.',
-  },
-  {
-    id: 'usr-emp-1',
-    name: 'Javier Gómez (Líder de Bodega y Empaque)',
-    email: 'empacador@pintuco.com',
-    password: 'pintuco2026',
-    role: 'empacador',
-    company: 'CEDI Rionegro · Planta Pintuco',
-    phone: '+57 314 620 7711',
-    city: 'Medellín / Rionegro',
-    badgeNumber: 'BOD-8812',
-  },
-  {
-    id: 'usr-con-1',
-    name: 'Wilson Cañas (Conductor Pintuco Express)',
-    email: 'conductor@pintuco.com',
-    password: 'pintuco2026',
-    role: 'conductor',
-    company: 'Flota Logística Pintuco',
-    phone: '+57 311 754 9988',
-    city: 'Medellín',
-    vehiclePlate: 'WTL-582 (Camión NHR 3.5 Ton)',
-    badgeNumber: 'LOG-TRK-109',
-  },
-];
-
-let memoryDb: SharedDatabase | null = null;
-
-function ensureSharedDatabase(): SharedDatabase {
-  if (memoryDb) return memoryDb;
-
+function safeReadJson<T>(filePath: string, fallback: T): T {
   try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-
-    if (fs.existsSync(SHARED_DB_PATH)) {
-      const content = fs.readFileSync(SHARED_DB_PATH, 'utf-8');
-      const parsed = JSON.parse(content);
-      if (parsed && Array.isArray(parsed.requests)) {
-        memoryDb = parsed;
-        return memoryDb!;
-      }
+    if (fs.existsSync(filePath)) {
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      return JSON.parse(raw) as T;
     }
   } catch (err) {
-    console.warn('[Sync DB] Error al leer archivo de base de datos:', err);
+    console.warn(`[CloudStore] Error leyendo archivo ${path.basename(filePath)}:`, err);
   }
-
-  // Si no existe, crear con datos base
-  memoryDb = {
-    requests: [
-      {
-        id: 'req-001',
-        requestCode: 'PTC-2026-8841',
-        createdAt: '2026-08-30 08:30',
-        clientName: 'Constructora Bolívar S.A.',
-        clientEmail: 'cliente@pintuco.com',
-        clientPhone: '+57 312 458 9920',
-        deliveryAddress: 'Cra 43A # 18 Sur - 135, Torre 2 El Poblado, Medellín',
-        city: 'Medellín',
-        projectType: 'Comercial',
-        surfaceType: 'fachada_exterior',
-        environment: 'exterior',
-        areaM2: 480,
-        colorName: 'Blanco Lirio Silvestre 01',
-        colorHex: '#f1f5f9',
-        notes: 'Fachada principal edificio corporativo 4 niveles. Requiere alta resistencia a lluvia y hongos.',
-        requiresApplicationService: true,
-        status: 'abastecimiento',
-        chatMessages: [
-          {
-            id: 'msg-init-1',
-            senderRole: 'conductor',
-            senderName: 'Wilson Cañas (Conductor)',
-            message: 'Hola Arq. Luisa Morales. Su pedido PTC-2026-8841 ya está verificado en muelle CEDI Rionegro.',
-            timestamp: '09:10',
-            createdAtIso: '2026-08-30T09:10:00Z',
-          },
-        ],
-        packagingDetails: {
-          packerId: 'usr-emp-1',
-          packerName: 'Javier Gómez (CEDI Rionegro)',
-          packedAt: '2026-08-30 10:15',
-          batchCode: 'LOTE-KOR-2026-B14',
-          checkedSupplies: ['5 Cuñetes Koraza® Máxima Protección (5 Gal)', '3 Galones Koraza® Máxima Protección'],
-          cuñetesPacked: 5,
-          galonesPacked: 3,
-          weightKg: 135.0,
-          qualitySealAttached: true,
-          qrInspectionCode: 'QR-PTC-99201-OK',
-          status: 'empacado_listo',
-          notes: 'Envases sellados herméticamente con precinto de seguridad Pintuco verificado.',
-        },
-        deliveryDetails: {
-          driverId: 'usr-con-1',
-          driverName: 'Wilson Cañas',
-          driverPhone: '+57 311 754 9988',
-          vehiclePlate: 'WTL-582',
-          vehicleType: 'Camión NHR 3.5 Toneladas',
-          currentLocation: 'Muelle 4 CEDI Rionegro - Listo para cargue',
-          routeStatus: 'cargado_en_muelle',
-          deliveryAddress: 'Cra 43A # 18 Sur - 135, El Poblado, Medellín',
-          estimatedArrival: '14:30 Hoy',
-        },
-      },
-    ],
-    users: [...DEFAULT_DEMO_USERS],
-    clients: [
-      {
-        id: 'usr-cli-1',
-        name: 'Constructora Bolívar (Arq. Luisa Morales)',
-        email: 'cliente@pintuco.com',
-        phone: '+57 312 458 9920',
-        company: 'Constructora Bolívar S.A.',
-        city: 'Medellín',
-        identification: '9001234567',
-        address: 'Cra 43A # 18 Sur - 135, Medellín',
-      },
-      {
-        id: 'usr-cli-bog',
-        name: 'Constructora Capital Bogotá (Ing. David Mendoza)',
-        email: 'clientebogota@pintuco.com',
-        phone: '+57 310 892 4433',
-        company: 'Constructora Capital Bogotá S.A.S.',
-        city: 'Bogotá D.C.',
-        identification: '9009876543',
-        address: 'Calle 100 # 19-61, Bogotá',
-      },
-    ],
-    version: 1,
-    lastUpdated: new Date().toISOString(),
-  };
-
-  persistSharedDatabase();
-  return memoryDb;
+  return fallback;
 }
 
-function persistSharedDatabase() {
-  if (!memoryDb) return;
+function safeWriteJson(filePath: string, data: any): void {
   try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-    fs.writeFileSync(SHARED_DB_PATH, JSON.stringify(memoryDb, null, 2), 'utf-8');
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
   } catch (err) {
-    console.warn('[Sync DB] Error al guardar en disco:', err);
+    console.error(`[CloudStore] Error guardando archivo ${path.basename(filePath)}:`, err);
   }
 }
 
-// GET /api/sync/state
-app.get('/api/sync/state', (req: Request, res: Response) => {
-  const db = ensureSharedDatabase();
-  return res.json({
-    success: true,
-    requests: db.requests,
-    users: db.users,
-    clients: db.clients,
-    version: db.version,
-    lastUpdated: db.lastUpdated,
+// In-memory active stores loaded from disk
+let requestsStore: any[] = safeReadJson<any[]>(REQUESTS_FILE, []);
+let clientsStore: any[] = safeReadJson<any[]>(CLIENTS_FILE, []);
+let usersStore: any[] = safeReadJson<any[]>(USERS_FILE, []);
+let inventoryStore: any[] = safeReadJson<any[]>(INVENTORY_FILE, COLORLINK_OFFICIAL_INVENTORY);
+
+let lastRequestUpdate = Date.now();
+let lastClientUpdate = Date.now();
+let lastInventoryUpdate = Date.now();
+
+// Conexiones activas SSE (Server-Sent Events) para empuje instantáneo multi-dispositivo
+const sseSubscribers = new Set<Response>();
+
+function broadcastCloudEvent(type: 'requests' | 'clients' | 'users' | 'inventory', payload?: any) {
+  const now = Date.now();
+  if (type === 'requests') lastRequestUpdate = now;
+  if (type === 'clients') lastClientUpdate = now;
+  if (type === 'inventory') lastInventoryUpdate = now;
+
+  const msg = JSON.stringify({
+    type,
+    data: payload,
+    timestamp: now,
   });
-});
 
-// POST /api/sync/requests
-app.post('/api/sync/requests', (req: Request, res: Response) => {
-  const db = ensureSharedDatabase();
-  const incoming = req.body.request || req.body.requests;
-  if (!incoming) {
-    return res.status(400).json({ error: 'Se requiere el pedido a sincronizar.' });
-  }
-
-  const items: any[] = Array.isArray(incoming) ? incoming : [incoming];
-  items.forEach((item) => {
-    if (!item || !item.id) return;
-    const existingIdx = db.requests.findIndex(
-      (r) => r.id === item.id || (item.requestCode && r.requestCode === item.requestCode)
-    );
-    if (existingIdx >= 0) {
-      db.requests[existingIdx] = { ...db.requests[existingIdx], ...item };
-    } else {
-      db.requests.unshift(item);
+  for (const clientRes of sseSubscribers) {
+    try {
+      clientRes.write(`event: sync\ndata: ${msg}\n\n`);
+    } catch {
+      sseSubscribers.delete(clientRes);
     }
-  });
+  }
+}
 
-  db.version += 1;
-  db.lastUpdated = new Date().toISOString();
-  persistSharedDatabase();
+// SSE Endpoint: Eventos en tiempo real para todos los dispositivos conectados
+app.get('/api/sync/events', (req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
 
-  return res.json({
-    success: true,
-    count: db.requests.length,
-    version: db.version,
-    lastUpdated: db.lastUpdated,
+  sseSubscribers.add(res);
+
+  // Mensaje de bienvenida inicial con cantidad de clientes conectados
+  res.write(
+    `event: connected\ndata: ${JSON.stringify({
+      activeClients: sseSubscribers.size,
+      timestamp: Date.now(),
+    })}\n\n`
+  );
+
+  const keepAlive = setInterval(() => {
+    try {
+      res.write(': keepalive\n\n');
+    } catch {
+      clearInterval(keepAlive);
+      sseSubscribers.delete(res);
+    }
+  }, 20000);
+
+  req.on('close', () => {
+    clearInterval(keepAlive);
+    sseSubscribers.delete(res);
   });
 });
 
-// PUT /api/sync/requests/:id
-app.put('/api/sync/requests/:id', (req: Request, res: Response) => {
-  const db = ensureSharedDatabase();
-  const reqId = req.params.id;
-  const updates = req.body;
-
-  const idx = db.requests.findIndex((r) => r.id === reqId || r.requestCode === reqId);
-  if (idx < 0) {
-    const newReq = { id: reqId, ...updates };
-    db.requests.unshift(newReq);
-    db.version += 1;
-    db.lastUpdated = new Date().toISOString();
-    persistSharedDatabase();
-    return res.json({ success: true, request: newReq, version: db.version });
-  }
-
-  db.requests[idx] = { ...db.requests[idx], ...updates };
-  db.version += 1;
-  db.lastUpdated = new Date().toISOString();
-  persistSharedDatabase();
-
-  return res.json({
-    success: true,
-    request: db.requests[idx],
-    version: db.version,
+// Estado de sincronización en la nube (para polling y badges)
+app.get('/api/sync/status', (req: Request, res: Response) => {
+  res.json({
+    ok: true,
+    activeConnections: sseSubscribers.size,
+    totalRequests: requestsStore.length,
+    totalClients: clientsStore.length,
+    lastRequestUpdate,
+    lastClientUpdate,
+    lastInventoryUpdate,
+    timestamp: Date.now(),
   });
 });
 
-// POST /api/sync/requests/:id/chat
-app.post('/api/sync/requests/:id/chat', (req: Request, res: Response) => {
-  const db = ensureSharedDatabase();
-  const reqId = req.params.id;
-  const msg = req.body.message;
+// Pedidos (Paint Requests) - GET, POST, PUT, DELETE
+app.get('/api/requests', (req: Request, res: Response) => {
+  res.json(requestsStore);
+});
 
-  if (!msg || !msg.message) {
-    return res.status(400).json({ error: 'Mensaje requerido' });
+app.post('/api/requests', (req: Request, res: Response) => {
+  const newReq = req.body;
+  if (!newReq || !newReq.id) {
+    return res.status(400).json({ error: 'Se requiere ID de pedido válido' });
   }
 
-  const idx = db.requests.findIndex((r) => r.id === reqId || r.requestCode === reqId);
+  const existingIdx = requestsStore.findIndex(
+    (r: any) => r.id === newReq.id || (r.requestCode && r.requestCode === newReq.requestCode)
+  );
+
+  if (existingIdx >= 0) {
+    requestsStore[existingIdx] = { ...requestsStore[existingIdx], ...newReq };
+  } else {
+    requestsStore.unshift(newReq);
+  }
+
+  safeWriteJson(REQUESTS_FILE, requestsStore);
+  broadcastCloudEvent('requests', newReq);
+
+  console.info(`[CloudSync] 📦 Pedido ${newReq.requestCode || newReq.id} sincronizado en la nube (${requestsStore.length} pedidos totales).`);
+  res.json({ success: true, request: newReq });
+});
+
+app.put('/api/requests/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const updatedReq = req.body;
+
+  const idx = requestsStore.findIndex((r: any) => r.id === id || r.requestCode === id);
   if (idx >= 0) {
-    const existingMessages = db.requests[idx].chatMessages || [];
-    db.requests[idx].chatMessages = [...existingMessages, msg];
-    db.version += 1;
-    db.lastUpdated = new Date().toISOString();
-    persistSharedDatabase();
-    return res.json({ success: true, chatMessages: db.requests[idx].chatMessages, version: db.version });
+    requestsStore[idx] = { ...requestsStore[idx], ...updatedReq };
+  } else {
+    requestsStore.unshift(updatedReq);
   }
 
-  return res.status(404).json({ error: 'Pedido no encontrado' });
+  safeWriteJson(REQUESTS_FILE, requestsStore);
+  broadcastCloudEvent('requests', updatedReq);
+
+  console.info(`[CloudSync] 🔄 Estado de Pedido ${id} actualizado en la nube.`);
+  res.json({ success: true, request: requestsStore[idx >= 0 ? idx : 0] });
 });
 
-// POST /api/sync/users
-app.post('/api/sync/users', (req: Request, res: Response) => {
-  const db = ensureSharedDatabase();
-  const user = req.body.user;
-  if (!user || !user.email) {
-    return res.status(400).json({ error: 'Datos de usuario requeridos' });
+app.delete('/api/requests/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  requestsStore = requestsStore.filter((r: any) => r.id !== id && r.requestCode !== id);
+  safeWriteJson(REQUESTS_FILE, requestsStore);
+  broadcastCloudEvent('requests', { deletedId: id });
+  res.json({ success: true });
+});
+
+// Clientes (Registered Clients) - GET, POST, DELETE
+app.get('/api/clients', (req: Request, res: Response) => {
+  res.json(clientsStore);
+});
+
+app.post('/api/clients', (req: Request, res: Response) => {
+  const clientData = req.body;
+  if (!clientData || !clientData.name || !clientData.email) {
+    return res.status(400).json({ error: 'Nombre y correo son requeridos.' });
   }
 
-  const cleanEmail = user.email.toLowerCase().trim();
-  const cleanUser = {
-    ...user,
+  const cleanEmail = (clientData.email || '').trim().toLowerCase();
+  const rawId = String(clientData.identification || '').trim();
+  const cleanId = rawId.replace(/\D/g, '').slice(0, 10);
+  const rawPhone = String(clientData.phone || '').trim();
+  const cleanPhone = rawPhone.replace(/\D/g, '').slice(0, 10);
+
+  const clientRecord = {
+    id: clientData.id || `cli-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    identification: cleanId || rawId,
+    name: clientData.name.trim(),
     email: cleanEmail,
+    phone: cleanPhone || '3000000000',
+    address: clientData.address || `${clientData.city || 'Medellín'}, Colombia`,
+    city: clientData.city || 'Medellín',
+    company: clientData.company || clientData.name.trim(),
+    password: clientData.password || 'cliente123',
+    createdAt: clientData.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    syncedToSupabase: true,
   };
 
-  const userIdx = db.users.findIndex((u) => u.email?.toLowerCase() === cleanEmail);
-  if (userIdx >= 0) {
-    db.users[userIdx] = { ...db.users[userIdx], ...cleanUser };
+  const existingIdx = clientsStore.findIndex(
+    (c: any) =>
+      (clientRecord.id && c.id === clientRecord.id) ||
+      (c.email && c.email.toLowerCase() === cleanEmail) ||
+      (cleanId && c.identification && c.identification.replace(/\D/g, '') === cleanId)
+  );
+
+  if (existingIdx >= 0) {
+    clientsStore[existingIdx] = { ...clientsStore[existingIdx], ...clientRecord };
   } else {
-    db.users.unshift(cleanUser);
+    clientsStore.unshift(clientRecord);
   }
 
-  const clientIdx = db.clients.findIndex((c) => c.email?.toLowerCase() === cleanEmail);
-  const clientData = {
-    id: user.id || `usr-${Date.now()}`,
-    name: user.name,
+  safeWriteJson(CLIENTS_FILE, clientsStore);
+
+  // Guardar también en usersStore para permitir inicio de sesión en cualquier dispositivo
+  const userRecord = {
+    id: clientRecord.id,
+    name: clientRecord.name,
     email: cleanEmail,
-    phone: user.phone || '',
-    company: user.company || 'Constructora / Cliente',
-    city: user.city || 'Medellín',
-    identification: user.identification || '',
-    address: user.address || '',
+    password: clientRecord.password,
+    phone: cleanPhone,
+    company: clientRecord.company,
+    role: 'cliente',
+    city: clientRecord.city,
+    address: clientRecord.address,
   };
-
-  if (clientIdx >= 0) {
-    db.clients[clientIdx] = { ...db.clients[clientIdx], ...clientData };
+  const uIdx = usersStore.findIndex((u: any) => u.email.toLowerCase() === cleanEmail);
+  if (uIdx >= 0) {
+    usersStore[uIdx] = { ...usersStore[uIdx], ...userRecord };
   } else {
-    db.clients.unshift(clientData);
+    usersStore.unshift(userRecord);
   }
+  safeWriteJson(USERS_FILE, usersStore);
 
-  db.version += 1;
-  db.lastUpdated = new Date().toISOString();
-  persistSharedDatabase();
+  broadcastCloudEvent('clients', clientRecord);
+  broadcastCloudEvent('users', userRecord);
 
-  return res.json({
-    success: true,
-    user: cleanUser,
-    version: db.version,
-  });
+  console.info(`[CloudSync] 👤 Nuevo Cliente guardado en la nube: ${clientRecord.name} (${cleanEmail}, Cédula: ${cleanId}). Visible para todos los dispositivos.`);
+  res.json({ success: true, client: clientRecord });
 });
 
-// GET /api/sync/users
-app.get('/api/sync/users', (req: Request, res: Response) => {
-  const db = ensureSharedDatabase();
-  return res.json({
-    success: true,
-    users: db.users,
-    clients: db.clients,
-    version: db.version,
-  });
+app.delete('/api/clients/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  clientsStore = clientsStore.filter((c: any) => c.id !== id && c.identification !== id);
+  safeWriteJson(CLIENTS_FILE, clientsStore);
+  broadcastCloudEvent('clients', { deletedId: id });
+  res.json({ success: true });
 });
 
-// POST /api/sync/password-reset
-app.post('/api/sync/password-reset', (req: Request, res: Response) => {
-  const db = ensureSharedDatabase();
-  const { email, newPassword } = req.body;
-  if (!email || !newPassword) {
-    return res.status(400).json({ error: 'email y newPassword son requeridos' });
+// Usuarios (Users for login across devices)
+app.get('/api/users', (req: Request, res: Response) => {
+  res.json(usersStore);
+});
+
+app.post('/api/users', (req: Request, res: Response) => {
+  const user = req.body;
+  if (!user || !user.email) return res.status(400).json({ error: 'Email requerido' });
+  const cleanEmail = user.email.trim().toLowerCase();
+  const idx = usersStore.findIndex((u: any) => u.email.toLowerCase() === cleanEmail);
+  if (idx >= 0) {
+    usersStore[idx] = { ...usersStore[idx], ...user };
+  } else {
+    usersStore.unshift(user);
   }
+  safeWriteJson(USERS_FILE, usersStore);
+  broadcastCloudEvent('users', user);
+  res.json({ success: true, user });
+});
 
-  const cleanEmail = email.toLowerCase().trim();
-  let updated = false;
+// Inventario compartido
+app.get('/api/inventory', (req: Request, res: Response) => {
+  res.json(inventoryStore);
+});
 
-  db.users.forEach((u) => {
-    if (u.email?.toLowerCase() === cleanEmail) {
-      u.password = newPassword;
-      updated = true;
-    }
-  });
-
-  db.clients.forEach((c) => {
-    if (c.email?.toLowerCase() === cleanEmail) {
-      c.password = newPassword;
-      updated = true;
-    }
-  });
-
-  if (updated) {
-    db.version += 1;
-    db.lastUpdated = new Date().toISOString();
-    persistSharedDatabase();
+app.post('/api/inventory', (req: Request, res: Response) => {
+  if (Array.isArray(req.body)) {
+    inventoryStore = req.body;
+    safeWriteJson(INVENTORY_FILE, inventoryStore);
+    broadcastCloudEvent('inventory', inventoryStore);
+    return res.json({ success: true, count: inventoryStore.length });
   }
-
-  return res.json({
-    success: true,
-    updated,
-    version: db.version,
-  });
+  res.status(400).json({ error: 'Array de inventario esperado' });
 });
 
 // Comprehensive, deep virtual assistant engine covering EVERYTHING in ColorLink

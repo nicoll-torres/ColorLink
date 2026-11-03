@@ -1,0 +1,52 @@
+[
+  {
+    "id": "usr-admin",
+    "name": "Director de Operaciones Pintuco",
+    "email": "admin@pintuco.com",
+    "password": "admin2026",
+    "phone": "3101112233",
+    "role": "administrador",
+    "company": "Pintuco S.A. Operaciones",
+    "city": "Medellín"
+  },
+  {
+    "id": "usr-pack",
+    "name": "Javier Gómez (CEDI)",
+    "email": "empacador@pintuco.com",
+    "password": "pintuco2026",
+    "phone": "3112223344",
+    "role": "empacador",
+    "company": "CEDI Rionegro",
+    "city": "Medellín"
+  },
+  {
+    "id": "usr-driver",
+    "name": "Wilson Cañas (Express)",
+    "email": "conductor@pintuco.com",
+    "password": "pintuco2026",
+    "phone": "3123334455",
+    "role": "conductor",
+    "company": "Flota Nacional Express",
+    "city": "Medellín"
+  },
+  {
+    "id": "cli-01",
+    "name": "Constructora Bolívar S.A.",
+    "email": "cliente@pintuco.com",
+    "password": "cliente123",
+    "phone": "3201122334",
+    "role": "cliente",
+    "company": "Constructora Bolívar S.A.",
+    "city": "Bogotá D.C."
+  },
+  {
+    "id": "cli-03",
+    "name": "Luisa Fernanda Gómez",
+    "email": "luisa.gomez@gmail.com",
+    "password": "cliente123",
+    "phone": "3104567890",
+    "role": "cliente",
+    "company": "Residencia Particular Las Palmas",
+    "city": "Medellín"
+  }
+]

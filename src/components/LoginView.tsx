@@ -18,8 +18,7 @@ import {
 import { getSupabaseClient } from '../supabase';
 import { sendPasswordRecoveryEmail, buildGmailComposeUrl } from '../emailService';
 import { googleSignIn } from '../googleAuth';
-import { fetchServerUsers, syncPasswordResetToServer } from '../syncService';
-import { cloudFetchUsers, cloudResetPassword } from '../cloudSync';
+import { fetchCloudUsers } from '../cloudSync';
 
 interface LoginViewProps {
   onLogin: (user: UserProfile) => void;
@@ -178,24 +177,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
       if (inDemo) foundUser = inDemo;
     }
 
-    // Buscar en Google Cloud Firestore (para Netlify app y multi-dispositivo)
-    if (!foundUser) {
-      try {
-        const cloudUsers = await cloudFetchUsers();
-        const inCloud = cloudUsers.find((cu) => cu.email.toLowerCase() === cleanEmail);
-        if (inCloud) foundUser = inCloud;
-      } catch {}
-    }
-
-    // Buscar en el servidor central multi-dispositivo
-    if (!foundUser) {
-      try {
-        const serverUsers = await fetchServerUsers();
-        const inServer = serverUsers.find((su) => su.email.toLowerCase() === cleanEmail);
-        if (inServer) foundUser = inServer;
-      } catch {}
-    }
-
     // Buscar en Supabase (public.usuarios o public.clientes) si está disponible
     const client = getSupabaseClient();
     if (!foundUser && client) {
@@ -229,13 +210,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
     const newPasswordCode = `CL-${randomDigits}`;
 
     // 3. Actualizar la contraseña en todas las fuentes de almacenamiento
-    // a) En Google Cloud Firestore (Netlify app y celulares/PCs)
-    await cloudResetPassword(cleanEmail, newPasswordCode).catch(console.warn);
-
-    // b) En servidor central multi-dispositivo para acceso desde cualquier equipo
-    await syncPasswordResetToServer(cleanEmail, newPasswordCode).catch(console.warn);
-
-    // b) En colorlink_users locales
+    // a) En colorlink_users
     const updatedUsers = localUsers.map((u) =>
       u.email.toLowerCase() === cleanEmail ? { ...u, password: newPasswordCode } : u
     );
@@ -255,7 +230,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
       localStorage.setItem('colorlink_users', JSON.stringify(updatedUsers));
     } catch {}
 
-    // c) En colorlink_clients si existía
+    // b) En colorlink_clients si existía
     if (storedClients.length > 0) {
       const updatedClients = storedClients.map((c) =>
         (c.email || '').toLowerCase() === cleanEmail ? { ...c, password: newPasswordCode } : c
@@ -265,7 +240,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
       } catch {}
     }
 
-    // d) En Supabase si está disponible
+    // c) En Supabase si está disponible
     if (client) {
       try {
         await client
@@ -316,8 +291,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
     setError('');
     setIsLoading(true);
 
-    const cleanInput = email.trim().toLowerCase();
-    const cleanDigits = email.trim().replace(/\D/g, '');
+    const normalizedEmail = email.trim().toLowerCase();
 
     // 1. Obtener usuarios registrados localmente en localStorage (usuarios, operarios y clientes)
     let localUsers: UserProfile[] = [];
@@ -367,38 +341,36 @@ export const LoginView: React.FC<LoginViewProps> = ({
           role: 'cliente',
           city: c.city || 'Medellín',
           address: c.address,
-          identification: c.identification,
         }));
       }
     } catch {}
 
-    // Consultar Google Cloud Firestore (Netlify app y multi-dispositivo en tiempo real)
-    let cloudUsers: UserProfile[] = [];
-    try {
-      cloudUsers = await cloudFetchUsers();
-    } catch {}
+    // Combinar usuarios: staff y clientes tienen prioridad sobre usuarios demo y locales
+    let allUsers = [...staffUsers, ...clientUsers, ...localUsers, ...DEMO_USERS];
+    let matchedUser = allUsers.find(
+      (u) => u.email.toLowerCase() === normalizedEmail
+    );
 
-    // Consultar el servidor central si está disponible
-    let serverUsers: UserProfile[] = [];
-    try {
-      serverUsers = await fetchServerUsers();
-    } catch {}
-
-    // Combinar usuarios: nube Firestore, servidor, staff, clientes locales y demo
-    const allUsers = [...staffUsers, ...clientUsers, ...cloudUsers, ...serverUsers, ...localUsers, ...DEMO_USERS];
-    
-    // Coincidencia flexible: por correo electrónico O por Cédula / NIT O por teléfono
-    let matchedUser = allUsers.find((u) => {
-      const uEmail = (u.email || '').toLowerCase().trim();
-      const uId = ((u as any).identification || '').replace(/\D/g, '');
-      const uPhone = (u.phone || '').replace(/\D/g, '');
-      if (uEmail === cleanInput) return true;
-      if (cleanDigits && uId && uId === cleanDigits) return true;
-      if (cleanDigits && uPhone && uPhone === cleanDigits) return true;
-      return false;
-    });
-
-    const normalizedEmail = matchedUser?.email || cleanInput;
+    // Si no está localmente, consultar la nube sincronizada multi-dispositivo
+    if (!matchedUser) {
+      try {
+        const cloudUsers = await fetchCloudUsers();
+        if (cloudUsers && cloudUsers.length > 0) {
+          const inCloud = cloudUsers.find(
+            (u) => (u.email || '').toLowerCase() === normalizedEmail
+          );
+          if (inCloud) {
+            matchedUser = inCloud;
+            try {
+              const updated = [inCloud, ...localUsers.filter((u) => u.email.toLowerCase() !== normalizedEmail)];
+              localStorage.setItem('colorlink_users', JSON.stringify(updated));
+            } catch {}
+          }
+        }
+      } catch (err) {
+        console.warn('Error al verificar usuarios en la nube:', err);
+      }
+    }
 
     // 2. Verificar en Supabase Cloud si hay cliente/conexión disponible
     const client = getSupabaseClient();
@@ -548,14 +520,14 @@ export const LoginView: React.FC<LoginViewProps> = ({
       <form onSubmit={handleSubmit} id="login-form" className="space-y-4">
         <Field
           id="login-email"
-          label="Correo Electrónico, NIT o Cédula"
-          type="text"
+          label="Correo electrónico"
+          type="email"
           value={email}
           onChange={(e) => {
             setEmail(e.target.value);
             if (error) setError('');
           }}
-          placeholder="ejemplo@colorlink.com o NIT/Cédula"
+          placeholder="ejemplo@colorlink.com"
           icon={<Mail className="w-4 h-4 text-blue-600" />}
           required
         />

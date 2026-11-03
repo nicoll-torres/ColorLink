@@ -40,8 +40,17 @@ import {
   getAllEmails,
 } from './emailService';
 import { syncPaintRequestToSupabase, syncAllInventoryToSupabase, getSupabaseConfig } from './supabase';
-import { syncRequestToServer, updateRequestOnServer, startAutoSync } from './syncService';
-import { cloudSyncRequest, cloudUpdateRequest, cloudSubscribeRequests, cloudSubscribeClients, cloudSubscribeUsers } from './cloudSync';
+import {
+  initCloudSync,
+  fetchCloudRequests,
+  saveCloudRequest,
+  updateCloudRequest,
+  fetchCloudClients,
+  fetchCloudUsers,
+  fetchCloudInventory,
+  saveCloudInventory,
+  CloudSyncState,
+} from './cloudSync';
 import { Sparkles, Sliders, Layers, User, LogOut, ShieldCheck, Boxes, Truck, Lock, UserPlus, Receipt, Database, Mail, CheckCircle2, Home, ShoppingBag, Bell } from './icons';
 
 export default function App() {
@@ -144,145 +153,70 @@ export default function App() {
     syncAllInventoryToSupabase(inventoryList).catch(console.error);
   }, []);
 
-  // Sincronización continua multi-dispositivo en tiempo real (Nube Compartida ColorLink)
-  // Garantiza que cualquier cliente o pedido creado en un celular sea visible en tablets y computadores
+  const [cloudSyncState, setCloudSyncState] = useState<CloudSyncState>({
+    connected: true,
+    activeDevices: 1,
+    lastSyncTimestamp: Date.now(),
+    sseActive: false,
+  });
+
+  // Conexión y sincronización multi-dispositivo en tiempo real (Nube ColorLink)
   useEffect(() => {
-    const unsub = startAutoSync((serverState) => {
-      if (serverState && Array.isArray(serverState.requests) && serverState.requests.length > 0) {
-        setRequests((localRequests) => {
-          const serverMap = new Map(serverState.requests.map((r) => [r.id, r]));
-
-          // Mezclar: pedidos del servidor + pedidos locales pendientes
-          const merged: PaintRequest[] = [...serverState.requests];
-          localRequests.forEach((locReq) => {
-            if (!serverMap.has(locReq.id)) {
-              merged.push(locReq);
-              // Subir pedido local al servidor para que otros dispositivos lo vean de inmediato
-              syncRequestToServer(locReq).catch(console.warn);
-            }
-          });
-
-          if (JSON.stringify(localRequests) !== JSON.stringify(merged)) {
-            persistRequests(merged);
-            return merged;
-          }
-          return localRequests;
-        });
-
-        // Mantener actualizado el pedido activo si un conductor o empacador cambió su estado desde otro dispositivo
-        setCurrentRequest((curr) => {
-          if (!curr) return serverState.requests[0] || curr;
-          const remoteCurr = serverState.requests.find((r) => r.id === curr.id);
-          if (remoteCurr && JSON.stringify(remoteCurr) !== JSON.stringify(curr)) {
-            return remoteCurr;
-          }
-          return curr;
-        });
-
-        // Sincronizar usuarios registrados entre dispositivos
-        if (Array.isArray(serverState.users) && serverState.users.length > 0) {
-          try {
-            const stored = localStorage.getItem('colorlink_users');
-            const localUsers: UserProfile[] = stored ? JSON.parse(stored) : [];
-            const userEmailSet = new Set(localUsers.map((u) => u.email.toLowerCase()));
-            const newUsers = serverState.users.filter((su) => !userEmailSet.has(su.email.toLowerCase()));
-            if (newUsers.length > 0) {
-              localStorage.setItem('colorlink_users', JSON.stringify([...localUsers, ...newUsers]));
-            }
-          } catch {}
-        }
-
-        // Sincronizar clientes registrados entre dispositivos
-        if (Array.isArray(serverState.clients) && serverState.clients.length > 0) {
-          try {
-            const stored = localStorage.getItem('colorlink_clients');
-            const localClients: any[] = stored ? JSON.parse(stored) : [];
-            const clientEmailSet = new Set(localClients.map((c) => (c.email || '').toLowerCase()));
-            const newClients = serverState.clients.filter((sc) => !clientEmailSet.has((sc.email || '').toLowerCase()));
-            if (newClients.length > 0) {
-              const mergedClients = [...localClients, ...newClients];
-              localStorage.setItem('colorlink_clients', JSON.stringify(mergedClients));
-              window.dispatchEvent(new CustomEvent('colorlink-client-updated', { detail: newClients[0] }));
-            }
-          } catch {}
-        }
-      }
-    }, 2500);
-
-    return () => {
-      unsub();
-    };
-  }, []);
-
-  // Sincronización en tiempo real directa con Google Cloud Firestore (ideal para Netlify app y cualquier navegador)
-  // Alerta a los computadores y celulares en menos de 500ms usando WebSockets oficiales de Firebase
-  useEffect(() => {
-    const unsubRequests = cloudSubscribeRequests((cloudRequests) => {
-      if (cloudRequests && cloudRequests.length > 0) {
-        setRequests((localRequests) => {
-          const cloudMap = new Map(cloudRequests.map((r) => [r.id, r]));
-          const merged: PaintRequest[] = [...cloudRequests];
-
-          localRequests.forEach((locReq) => {
-            if (!cloudMap.has(locReq.id)) {
-              merged.push(locReq);
-              cloudSyncRequest(locReq).catch(console.warn);
-            }
-          });
-
-          if (JSON.stringify(localRequests) !== JSON.stringify(merged)) {
-            persistRequests(merged);
-            return merged;
-          }
-          return localRequests;
-        });
-
-        setCurrentRequest((curr) => {
-          if (!curr) return cloudRequests[0] || curr;
-          const remoteCurr = cloudRequests.find((r) => r.id === curr.id);
-          if (remoteCurr && JSON.stringify(remoteCurr) !== JSON.stringify(curr)) {
-            return remoteCurr;
-          }
-          return curr;
-        });
+    // 1. Cargar pedidos desde el servidor central en la nube
+    fetchCloudRequests().then((cloudReqs) => {
+      if (Array.isArray(cloudReqs) && cloudReqs.length > 0) {
+        setRequests(cloudReqs);
+        persistRequests(cloudReqs);
       }
     });
 
-    const unsubClients = cloudSubscribeClients((cloudClients) => {
-      if (cloudClients && cloudClients.length > 0) {
+    // 2. Cargar clientes e inventario en segundo plano
+    fetchCloudClients().then((cloudClients) => {
+      if (Array.isArray(cloudClients) && cloudClients.length > 0) {
         try {
-          const stored = localStorage.getItem('colorlink_clients');
-          const localClients: any[] = stored ? JSON.parse(stored) : [];
-          const emailMap = new Map();
-          localClients.forEach((c) => emailMap.set((c.email || c.id || '').toLowerCase(), c));
-          cloudClients.forEach((c) => emailMap.set((c.email || c.id || '').toLowerCase(), c));
-          const allMerged = Array.from(emailMap.values());
-          localStorage.setItem('colorlink_clients', JSON.stringify(allMerged));
-          window.dispatchEvent(new CustomEvent('colorlink-client-updated', { detail: cloudClients[0] }));
+          localStorage.setItem('colorlink_clients', JSON.stringify(cloudClients));
+        } catch {}
+      }
+    });
+    fetchCloudUsers().then((cloudUsers) => {
+      if (Array.isArray(cloudUsers) && cloudUsers.length > 0) {
+        try {
+          localStorage.setItem('colorlink_users', JSON.stringify(cloudUsers));
         } catch {}
       }
     });
 
-    const unsubUsers = cloudSubscribeUsers((cloudUsers) => {
-      if (cloudUsers && cloudUsers.length > 0) {
-        try {
-          const stored = localStorage.getItem('colorlink_users');
-          const localUsers: UserProfile[] = stored ? JSON.parse(stored) : [];
-          const emailMap = new Map<string, UserProfile>();
-          localUsers.forEach((u) => emailMap.set((u.email || u.id || '').toLowerCase(), u));
-          cloudUsers.forEach((u) => emailMap.set((u.email || u.id || '').toLowerCase(), u));
-          const allMerged = Array.from(emailMap.values());
-          localStorage.setItem('colorlink_users', JSON.stringify(allMerged));
-          window.dispatchEvent(new CustomEvent('colorlink-users-updated', { detail: allMerged }));
-        } catch {}
-      }
+    // 3. Suscribirse a eventos de la nube en tiempo real (multi-dispositivo)
+    const cleanup = initCloudSync({
+      onRequestsChange: (cloudReqs) => {
+        if (Array.isArray(cloudReqs) && cloudReqs.length > 0) {
+          setRequests(cloudReqs);
+          persistRequests(cloudReqs);
+          setCurrentRequest((prev) => {
+            const found = cloudReqs.find((r) => r.id === prev.id);
+            return found || prev;
+          });
+        }
+      },
+      onClientsChange: (cloudClients) => {
+        if (Array.isArray(cloudClients) && cloudClients.length > 0) {
+          try {
+            localStorage.setItem('colorlink_clients', JSON.stringify(cloudClients));
+            window.dispatchEvent(new CustomEvent('colorlink-client-updated', { detail: cloudClients[0] }));
+          } catch {}
+        }
+      },
+      onInventoryChange: (cloudInv) => {
+        if (Array.isArray(cloudInv) && cloudInv.length > 0) {
+          setInventoryList(cloudInv);
+        }
+      },
+      onConnectionChange: (state) => {
+        setCloudSyncState(state);
+      },
     });
 
-    return () => {
-      unsubRequests();
-      unsubClients();
-      unsubUsers();
-    };
+    return cleanup;
   }, []);
 
   // Selección pendiente desde la página de inicio o catálogo
@@ -639,11 +573,10 @@ export default function App() {
     };
   }, []);
 
-  // Guardar en localStorage cuando cambian los pedidos y notificar a vistas
+  // Guardar en localStorage cuando cambian los pedidos
   const persistRequests = (updatedList: PaintRequest[]) => {
     try {
       localStorage.setItem('colorlink_paint_requests', JSON.stringify(updatedList));
-      window.dispatchEvent(new CustomEvent('colorlink-paint-requests-updated', { detail: updatedList }));
     } catch (err) {
       console.warn('Error al guardar localmente:', err);
     }
@@ -658,6 +591,7 @@ export default function App() {
     } catch (err) {
       console.warn('Error al guardar inventario:', err);
     }
+    saveCloudInventory(updatedInv).catch(console.warn);
     syncAllInventoryToSupabase(updatedInv).catch(console.error);
   };
 
@@ -736,11 +670,8 @@ export default function App() {
     if (currentRequest.id === updated.id) {
       setCurrentRequest(updated);
     }
-    // Sincronizar inmediatamente con Google Cloud Firestore (para Netlify app y cualquier celular/PC)
-    cloudUpdateRequest(updated.id, updated).catch(console.warn);
-    // Sincronizar con servidor central si está disponible
-    updateRequestOnServer(updated.id, updated).catch(console.warn);
-    // Sincronizar en segundo plano con Supabase Cloud (12 tablas)
+    // Sincronizar en la nube central ColorLink para todos los dispositivos y en Supabase
+    updateCloudRequest(updated).catch(console.warn);
     syncPaintRequestToSupabase(updated);
   };
 
@@ -1019,17 +950,16 @@ export default function App() {
         console.warn('Error al guardar inventario:', err);
       }
 
+      saveCloudInventory(updatedInv).catch(console.warn);
+
       return updatedInv;
     });
 
     // 3. Limpiar selección pendiente
     updatePendingRequestData(null);
 
-    // 4. Sincronizar de inmediato con Google Cloud Firestore (Netlify app y multi-dispositivo)
-    cloudSyncRequest(newReq).catch(console.warn);
-    syncRequestToServer(newReq).catch(console.warn);
-
-    // 5. Sincronizar en segundo plano con Supabase Cloud (12 tablas)
+    // 4. Sincronizar en la nube central ColorLink para todos los dispositivos y en Supabase
+    saveCloudRequest(newReq).catch(console.warn);
     syncPaintRequestToSupabase(newReq);
   };
 
@@ -1229,6 +1159,7 @@ export default function App() {
               setIsEmailInboxOpen(true);
             }}
             emailUnreadCount={emailStats.unread}
+            cloudSyncState={cloudSyncState}
           />
 
           {/* Renderizado de la Vista Principal */}

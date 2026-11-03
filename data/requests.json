@@ -1,0 +1,228 @@
+[
+  {
+    "id": "req-001",
+    "requestCode": "PTC-2026-8841",
+    "createdAt": "2026-08-30 08:30",
+    "clientName": "Constructora Bolívar S.A.",
+    "clientEmail": "cliente@pintuco.com",
+    "clientPhone": "3201122334",
+    "deliveryAddress": "Cra 43A # 18 Sur - 135, Torre 2 El Poblado, Medellín",
+    "city": "Medellín",
+    "projectType": "Comercial",
+    "surfaceType": "fachada_exterior",
+    "environment": "exterior",
+    "areaM2": 480,
+    "colorName": "Blanco Lirio Silvestre 01",
+    "colorHex": "#f1f5f9",
+    "notes": "Fachada principal edificio corporativo 4 niveles. Requiere alta resistencia a lluvia y hongos.",
+    "requiresApplicationService": true,
+    "status": "abastecimiento",
+    "technicalCalculation": {
+      "surfaceType": "fachada_exterior",
+      "areaM2": 480,
+      "recommendedProduct": {
+        "id": "koraza-maxima-proteccion",
+        "name": "Koraza® Máxima Protección",
+        "category": "Pintura Acrílica Exterior Alta Resistencia",
+        "line": "Fachadas y Exteriores",
+        "pricePerGalon": 135000
+      },
+      "litersNeeded": 105,
+      "handsNeeded": 2,
+      "totalCuñetes": 5,
+      "remainderGalons": 3,
+      "totalGalonsExact": 28,
+      "dilutionRecommendation": "10% a 15% con agua limpia en la primera mano",
+      "estimatedMaterialCostCOP": 4155000,
+      "estimatedLaborCostCOP": 1440000,
+      "estimatedTotalCOP": 5595000,
+      "requiresPrimer": true,
+      "recommendedPrimerName": "Sellomax® 7 en 1",
+      "primerGalonsNeeded": 10
+    },
+    "inventoryAllocation": {
+      "warehouseCity": "Medellín",
+      "warehouseName": "Centro Logístico Principal - Planta Rionegro",
+      "batchNumber": "LOTE-KOR-2026-B14",
+      "stockConfirmed": true,
+      "dispatchReadyDate": "2026-08-31"
+    },
+    "packagingDetails": {
+      "packerId": "usr-emp-1",
+      "packerName": "Javier Gómez (CEDI Rionegro)",
+      "packedAt": "2026-08-30 10:15",
+      "batchCode": "LOTE-KOR-2026-B14",
+      "checkedSupplies": [
+        "5 Cuñetes Koraza® Máxima Protección (5 Gal)",
+        "3 Galones Koraza® Máxima Protección"
+      ],
+      "manualItems": [
+        {
+          "id": "item-001-c",
+          "description": "Koraza® Máxima Protección (Color: Blanco Lirio Silvestre 01)",
+          "quantity": 5,
+          "unit": "Cuñete (5 Gal)",
+          "notes": "Lote de fábrica verificado",
+          "verified": true
+        },
+        {
+          "id": "item-001-g",
+          "description": "Koraza® Máxima Protección (Color: Blanco Lirio Silvestre 01)",
+          "quantity": 3,
+          "unit": "Galón (1 Gal)",
+          "notes": "Galones individuales sellados",
+          "verified": true
+        }
+      ],
+      "cuñetesPacked": 5,
+      "galonesPacked": 3,
+      "weightKg": 135.0,
+      "qualitySealAttached": true,
+      "qrInspectionCode": "QR-PTC-99201-OK",
+      "status": "empacado_listo",
+      "notes": "Envases sellados herméticamente con precinto de seguridad Pintuco verificado."
+    },
+    "deliveryDetails": {
+      "driverId": "usr-con-1",
+      "driverName": "Wilson Cañas",
+      "driverPhone": "3117549988",
+      "vehiclePlate": "WTL-582",
+      "vehicleType": "Camión NHR 3.5 Toneladas",
+      "currentLocation": "Muelle 4 CEDI Rionegro - Listo para cargue",
+      "routeStatus": "cargado_en_muelle"
+    }
+  },
+  {
+    "id": "req-002",
+    "requestCode": "PTC-2026-8842",
+    "createdAt": "2026-08-30 07:15",
+    "clientName": "Clínica San Vicente de Paúl",
+    "clientEmail": "infraestructura@sanvicente.org",
+    "clientPhone": "3006712234",
+    "deliveryAddress": "Calle 64 # 51D - 154, Bloque Quirófanos, Medellín",
+    "city": "Medellín",
+    "projectType": "Institucional",
+    "surfaceType": "mamposteria_interior",
+    "environment": "interior",
+    "areaM2": 240,
+    "colorName": "Verde Quirófano & Blanco Higiene",
+    "colorHex": "#e6f4ea",
+    "notes": "Pintura antibacterial con cero olor y rápido secado para pasillos de urgencias.",
+    "requiresApplicationService": true,
+    "status": "servicio_despacho",
+    "technicalCalculation": {
+      "surfaceType": "mamposteria_interior",
+      "areaM2": 240,
+      "recommendedProduct": {
+        "id": "viniltex-biocuidado",
+        "name": "Viniltex® BioCuidado",
+        "category": "Pintura Acrílica Premium Interior",
+        "line": "Hogar y Construcción",
+        "pricePerGalon": 98000
+      },
+      "litersNeeded": 45,
+      "handsNeeded": 2,
+      "totalCuñetes": 2,
+      "remainderGalons": 2,
+      "totalGalonsExact": 12,
+      "dilutionRecommendation": "Máximo 20% agua potable",
+      "estimatedMaterialCostCOP": 1176000,
+      "estimatedLaborCostCOP": 720000,
+      "estimatedTotalCOP": 1896000,
+      "requiresPrimer": false
+    },
+    "inventoryAllocation": {
+      "warehouseCity": "Medellín",
+      "warehouseName": "CEDI Rionegro Pintuco",
+      "batchNumber": "LOTE-VTB-2026-BIO09",
+      "stockConfirmed": true,
+      "dispatchReadyDate": "2026-08-30"
+    },
+    "packagingDetails": {
+      "packerId": "usr-emp-1",
+      "packerName": "Javier Gómez (CEDI Rionegro)",
+      "packedAt": "2026-08-30 08:45",
+      "batchCode": "LOTE-VTB-2026-BIO09",
+      "checkedSupplies": [
+        "2 Cuñetes Viniltex® BioCuidado (5 Gal)",
+        "2 Galones Viniltex® BioCuidado"
+      ],
+      "manualItems": [
+        {
+          "id": "item-002-c",
+          "description": "Viniltex® BioCuidado Antibacterial Verde Quirófano",
+          "quantity": 2,
+          "unit": "Cuñete (5 Gal)",
+          "notes": "Lote BioCuidado especial",
+          "verified": true
+        }
+      ],
+      "cuñetesPacked": 2,
+      "galonesPacked": 2,
+      "weightKg": 60.0,
+      "qualitySealAttached": true,
+      "qrInspectionCode": "QR-PTC-99202-OK",
+      "status": "empacado_listo",
+      "notes": "Empacado con sello hospitalario."
+    },
+    "deliveryDetails": {
+      "driverId": "usr-con-1",
+      "driverName": "Wilson Cañas",
+      "driverPhone": "3117549988",
+      "vehiclePlate": "WTL-582",
+      "vehicleType": "Camión NHR 3.5 Toneladas",
+      "currentLocation": "Autopista Norte Km 4 - En desplazamiento a la clínica",
+      "routeStatus": "en_ruta",
+      "estimatedArrival": "11:45 AM"
+    }
+  },
+  {
+    "id": "req-003",
+    "requestCode": "PTC-2026-8843",
+    "createdAt": "2026-08-30 11:20",
+    "clientName": "Industrias Metalmecánicas del Valle",
+    "clientEmail": "produccion@metalvalle.co",
+    "clientPhone": "3189013345",
+    "deliveryAddress": "Zona Industrial Acopi, Carrera 32 # 14-80, Cali / Medellín",
+    "city": "Medellín",
+    "projectType": "Industrial",
+    "surfaceType": "concreto_piso",
+    "environment": "industrial",
+    "areaM2": 620,
+    "colorName": "Gris Tráfico Industrial Epóxico",
+    "colorHex": "#64748b",
+    "notes": "Piso de bodega de montacargas, requiere alta resistencia mecánica y a grasas.",
+    "requiresApplicationService": false,
+    "status": "solicitud_recibida",
+    "technicalCalculation": {
+      "surfaceType": "concreto_piso",
+      "areaM2": 620,
+      "recommendedProduct": {
+        "id": "pintucoat-epoxico-500",
+        "name": "Pintucoat® Epóxico Poliamida 500",
+        "category": "Recubrimiento Epóxico Alto Tráfico",
+        "line": "Industrial y Pisos",
+        "pricePerGalon": 195000
+      },
+      "litersNeeded": 180,
+      "handsNeeded": 2,
+      "totalCuñetes": 8,
+      "remainderGalons": 4,
+      "totalGalonsExact": 44,
+      "dilutionRecommendation": "10% Disolvente Epóxico Pintuco",
+      "estimatedMaterialCostCOP": 8580000,
+      "estimatedLaborCostCOP": 0,
+      "estimatedTotalCOP": 8580000,
+      "requiresPrimer": true,
+      "recommendedPrimerName": "Imprimante Epóxico Pintuco",
+      "primerGalonsNeeded": 12
+    },
+    "inventoryAllocation": {
+      "warehouseCity": "Medellín",
+      "warehouseName": "Hub Regional CEDI Rionegro",
+      "batchNumber": "LOTE-EPOX-500-Y2",
+      "stockConfirmed": true,
+      "dispatchReadyDate": "2026-09-01"
+    }
+  }
+]
