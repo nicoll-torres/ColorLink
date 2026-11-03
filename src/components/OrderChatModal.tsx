@@ -43,11 +43,11 @@ export const OrderChatModal: React.FC<OrderChatModalProps> = ({
   // Contact partner info
   const partnerName = isDriver
     ? request.clientName
-    : (request.deliveryDetails?.driverName || 'Wilson Cañas (Conductor)');
+    : (request.deliveryDetails?.driverName || 'Conductor');
   
   const partnerRoleLabel = isDriver
-    ? 'Cliente · Destinatario de Entrega'
-    : `Conductor Pintuco Express · Placa ${request.deliveryDetails?.vehiclePlate || 'WTL-582'}`;
+    ? 'Cliente · Destinatario'
+    : `Conductor · Placa ${request.deliveryDetails?.vehiclePlate || 'WTL-582'}`;
 
   const partnerPhone = isDriver ? request.clientPhone : (request.deliveryDetails?.driverPhone || '+57 311 754 9988');
 
@@ -188,7 +188,7 @@ export const OrderChatModal: React.FC<OrderChatModalProps> = ({
                 </span>
               </span>
               <span className="font-mono text-[10px] text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded font-bold shrink-0">
-                MENSAJES PINTUCO
+                MENSAJES DIRECTOS
               </span>
             </div>
 

@@ -41,7 +41,7 @@ import {
 } from './emailService';
 import { syncPaintRequestToSupabase, syncAllInventoryToSupabase, getSupabaseConfig } from './supabase';
 import { syncRequestToServer, updateRequestOnServer, startAutoSync } from './syncService';
-import { cloudSyncRequest, cloudUpdateRequest, cloudSubscribeRequests, cloudSubscribeClients } from './cloudSync';
+import { cloudSyncRequest, cloudUpdateRequest, cloudSubscribeRequests, cloudSubscribeClients, cloudSubscribeUsers } from './cloudSync';
 import { Sparkles, Sliders, Layers, User, LogOut, ShieldCheck, Boxes, Truck, Lock, UserPlus, Receipt, Database, Mail, CheckCircle2, Home, ShoppingBag, Bell } from './icons';
 
 export default function App() {
@@ -254,8 +254,8 @@ export default function App() {
           const stored = localStorage.getItem('colorlink_clients');
           const localClients: any[] = stored ? JSON.parse(stored) : [];
           const emailMap = new Map();
-          localClients.forEach((c) => emailMap.set((c.email || '').toLowerCase(), c));
-          cloudClients.forEach((c) => emailMap.set((c.email || '').toLowerCase(), c));
+          localClients.forEach((c) => emailMap.set((c.email || c.id || '').toLowerCase(), c));
+          cloudClients.forEach((c) => emailMap.set((c.email || c.id || '').toLowerCase(), c));
           const allMerged = Array.from(emailMap.values());
           localStorage.setItem('colorlink_clients', JSON.stringify(allMerged));
           window.dispatchEvent(new CustomEvent('colorlink-client-updated', { detail: cloudClients[0] }));
@@ -263,9 +263,25 @@ export default function App() {
       }
     });
 
+    const unsubUsers = cloudSubscribeUsers((cloudUsers) => {
+      if (cloudUsers && cloudUsers.length > 0) {
+        try {
+          const stored = localStorage.getItem('colorlink_users');
+          const localUsers: UserProfile[] = stored ? JSON.parse(stored) : [];
+          const emailMap = new Map<string, UserProfile>();
+          localUsers.forEach((u) => emailMap.set((u.email || u.id || '').toLowerCase(), u));
+          cloudUsers.forEach((u) => emailMap.set((u.email || u.id || '').toLowerCase(), u));
+          const allMerged = Array.from(emailMap.values());
+          localStorage.setItem('colorlink_users', JSON.stringify(allMerged));
+          window.dispatchEvent(new CustomEvent('colorlink-users-updated', { detail: allMerged }));
+        } catch {}
+      }
+    });
+
     return () => {
       unsubRequests();
       unsubClients();
+      unsubUsers();
     };
   }, []);
 
@@ -623,10 +639,11 @@ export default function App() {
     };
   }, []);
 
-  // Guardar en localStorage cuando cambian los pedidos
+  // Guardar en localStorage cuando cambian los pedidos y notificar a vistas
   const persistRequests = (updatedList: PaintRequest[]) => {
     try {
       localStorage.setItem('colorlink_paint_requests', JSON.stringify(updatedList));
+      window.dispatchEvent(new CustomEvent('colorlink-paint-requests-updated', { detail: updatedList }));
     } catch (err) {
       console.warn('Error al guardar localmente:', err);
     }

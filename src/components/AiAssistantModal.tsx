@@ -233,6 +233,43 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
     }
   };
 
+  const UNRELATED_QUESTION_RESPONSE =
+    'Disculpa, como asesor especialista en pinturas y recubrimientos de ColorLink, únicamente puedo responder preguntas relacionadas con pinturas, preparación de superficies, colores, impermeabilización y aplicación de recubrimientos. No puedo responder este tipo de preguntas. ¿En qué proyecto o requerimiento de pintura te puedo colaborar hoy?';
+
+  const isUnrelatedToPaintDomain = (query: string): boolean => {
+    const q = (query || '').toLowerCase().trim();
+    if (!q) return false;
+    const greetings = [
+      'hola', 'buenos dias', 'buenos días', 'buenas tardes', 'buenas noches',
+      'saludos', 'buenas', 'que puedes hacer', 'qué puedes hacer', 'ayuda',
+      'quien eres', 'quién eres', 'hola asesor', 'hola robot'
+    ];
+    if (greetings.some((g) => q === g || q.startsWith(`${g} `) || q.startsWith(`${g},`) || q.startsWith(`${g}!`) || q.startsWith(`${g}?`))) {
+      return false;
+    }
+
+    const PAINT_KEYWORDS = [
+      'pintur', 'pintar', 'pinto', 'color', 'vinil', 'esmalte', 'epox', 'epóx', 'barniz',
+      'laca', 'sello', 'sellomax', 'viniltex', 'koraza', 'pintucoat', 'pintulux', 'acronal',
+      'maderprotect', 'resina', 'primer', 'imprimante', 'base', 'acabado', 'mate', 'satinado',
+      'brillant', 'brillo', 'muro', 'pared', 'fachada', 'techo', 'cielo', 'yeso', 'drywall',
+      'madera', 'metal', 'reja', 'hierro', 'acero', 'aluminio', 'piso', 'concreto', 'cemento',
+      'ladrillo', 'estuco', 'grieta', 'fisura', 'salitre', 'humedad', 'hongo', 'moho',
+      'descascar', 'ampoll', 'filtraci', 'impermeabiliz', 'antioxid', 'anticorros', 'lij',
+      'broch', 'rodill', 'espatul', 'espátul', 'bandej', 'cinta', 'thinner', 'solvente',
+      'diluci', 'diluir', 'rendimient', 'cobertur', 'metro', 'm2', 'm²', 'mano', 'galon',
+      'galón', 'cuñete', 'cuarto', 'litro', 'secado', 'curado', 'obra', 'proyecto',
+      'cedi', 'bodega', 'almacen', 'almacén', 'stock', 'inventario', 'lote', 'pedido',
+      'orden', 'compra', 'cotiz', 'costo', 'precio', 'despacho', 'envio', 'envío',
+      'entrega', 'camion', 'camión', 'conductor', 'factura', 'dian', 'cufe', 'garantia',
+      'garantía', 'calidad', 'certificado', 'pintuco', 'colorlink', 'tonalidad', 'pigment',
+      'lavab', 'recubrimient'
+    ];
+
+    const hasPaintKeyword = PAINT_KEYWORDS.some((kw) => q.includes(kw));
+    return !hasPaintKeyword;
+  };
+
   const generateClientFallback = (qText: string, hasImg: string | null): string => {
     const q = (qText || '').toLowerCase();
     const cityContext = city || 'Bogotá D.C.';
@@ -248,6 +285,11 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
    • Aplicar 1 mano de **Sellomax® 7 en 1** para fijar partículas sueltas y sellar porosidad.
 3. **Acabado de Calidad:**
    • Aplicar 2 manos de **Viniltex® BioCuidado** para áreas interiores o **Koraza® Máxima Protección** para exteriores.`;
+    }
+
+    // REGLA ESTRICTA DE DOMINIO: Preguntas que no tengan que ver con pintura
+    if (isUnrelatedToPaintDomain(qText)) {
+      return UNRELATED_QUESTION_RESPONSE;
     }
 
     // 0. BÚSQUEDA Y CONSULTA DE INVENTARIO / STOCK

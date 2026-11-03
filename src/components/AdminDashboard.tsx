@@ -20,7 +20,8 @@ import {
   DEFAULT_SUPABASE_KEY,
   normalizeSupabaseUrl,
 } from '../supabase';
-import { cloudSubscribeClients } from '../cloudSync';
+import { cloudSubscribeClients, cloudSyncUser } from '../cloudSync';
+import { isSameCity } from '../utils/cityUtils';
 import {
   ShieldCheck,
   Building,
@@ -578,13 +579,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const alertStockItems = inventoryList.filter((i) => i.status !== 'optimo').length;
 
   const filteredRequests = requests.filter((r) => {
-    const matchesSearch =
-      r.requestCode.toLowerCase().includes(search.toLowerCase()) ||
-      r.clientName.toLowerCase().includes(search.toLowerCase()) ||
-      r.city.toLowerCase().includes(search.toLowerCase());
+    const q = (search || '').toLowerCase();
+    const reqCode = (r.requestCode || '').toLowerCase();
+    const cName = (r.clientName || '').toLowerCase();
+    const cCity = (r.city || '').toLowerCase();
+    const matchesSearch = !q || reqCode.includes(q) || cName.includes(q) || cCity.includes(q);
     if (!matchesSearch) return false;
 
-    if (selectedCity !== 'todos' && r.city !== selectedCity) return false;
+    if (selectedCity !== 'todos' && !isSameCity(r.city, selectedCity)) return false;
     if (selectedStatus !== 'todos' && r.status !== selectedStatus) return false;
     return true;
   });
@@ -968,8 +970,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     setIsSavingClient(true);
 
-    const sanitizedId = (editingClient.identification || '').replace(/\D/g, '');
-    const sanitizedPhone = (editingClient.phone || '').replace(/\D/g, '');
+    const sanitizedId = (editingClient.identification || '').replace(/\D/g, '').slice(0, 10);
+    const sanitizedPhone = (editingClient.phone || '').replace(/\D/g, '').slice(0, 10);
 
     const updatedClient = {
       ...editingClient,
@@ -977,6 +979,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       phone: sanitizedPhone || editingClient.phone,
       updatedAt: new Date().toISOString(),
     };
+
+    // Sincronizar en Google Cloud Firestore para todos los dispositivos
+    cloudSyncUser({
+      id: updatedClient.id,
+      name: updatedClient.name,
+      email: updatedClient.email,
+      phone: updatedClient.phone,
+      company: updatedClient.company,
+      role: 'cliente',
+      city: updatedClient.city,
+      address: updatedClient.address,
+      identification: updatedClient.identification,
+      password: updatedClient.password,
+    }).catch(console.warn);
 
     // 1. Guardar de forma persistente en la Base de Datos (Local y Supabase Cloud)
     let syncSuccess = false;
@@ -1230,18 +1246,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
 
     setIsCreatingClient(true);
+    const cleanId = (newClientForm.identification || '').replace(/\D/g, '').slice(0, 10);
+    const cleanPhone = (newClientForm.phone || '').replace(/\D/g, '').slice(0, 10);
+
     const newClientObj = {
       id: 'cli-' + Math.random().toString(36).substring(2, 7),
-      identification: newClientForm.identification.trim() || `NIT-${Math.floor(Math.random() * 9000000 + 1000000)}`,
+      identification: cleanId || `${Math.floor(Math.random() * 900000000 + 100000000)}`,
       name: newClientForm.name.trim(),
       email: newClientForm.email.trim().toLowerCase(),
-      phone: newClientForm.phone.trim(),
+      phone: cleanPhone || newClientForm.phone.trim(),
       address: newClientForm.address.trim() || `${newClientForm.city}, Colombia`,
       city: newClientForm.city,
       company: newClientForm.company.trim() || newClientForm.name.trim(),
       createdAt: new Date().toISOString(),
       syncedToSupabase: false,
     };
+
+    // Sincronizar de inmediato en Google Cloud Firestore para todos los celulares y computadores
+    cloudSyncUser({
+      id: newClientObj.id,
+      name: newClientObj.name,
+      email: newClientObj.email,
+      password: 'cliente123',
+      phone: newClientObj.phone,
+      company: newClientObj.company,
+      role: 'cliente',
+      city: newClientObj.city,
+      address: newClientObj.address,
+      identification: newClientObj.identification,
+    }).catch(console.warn);
 
     // 1. Guardar en Supabase Cloud (tablas clientes y usuarios)
     let syncNotice = '';
@@ -4135,16 +4168,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    NIT o Cédula (Documento) <span className="text-red-500">*</span>
+                    NIT o Cédula (máx. 10 dígitos) <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="Ej: 900.789.654-2 o 1032456789"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={10}
+                    placeholder="Ej: 1032456789 (hasta 10 dígitos)"
                     value={newClientForm.identification}
-                    onChange={(e) => setNewClientForm({ ...newClientForm, identification: e.target.value })}
+                    onChange={(e) =>
+                      setNewClientForm({
+                        ...newClientForm,
+                        identification: e.target.value.replace(/\D/g, '').slice(0, 10),
+                      })
+                    }
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl font-mono focus:ring-1 focus:ring-blue-500 focus:outline-hidden"
                   />
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">Solo números, máximo 10 dígitos</span>
                 </div>
 
                 <div>
@@ -4176,16 +4218,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Teléfono / Celular (WhatsApp) <span className="text-red-500">*</span>
+                    Teléfono / Celular (máx. 10 dígitos) <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="tel"
                     required
-                    placeholder="Ej: 310 123 4567"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={10}
+                    placeholder="Ej: 3101234567 (hasta 10 dígitos)"
                     value={newClientForm.phone}
-                    onChange={(e) => setNewClientForm({ ...newClientForm, phone: e.target.value })}
+                    onChange={(e) =>
+                      setNewClientForm({
+                        ...newClientForm,
+                        phone: e.target.value.replace(/\D/g, '').slice(0, 10),
+                      })
+                    }
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl font-mono focus:ring-1 focus:ring-blue-500 focus:outline-hidden"
                   />
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">Solo números, máximo 10 dígitos</span>
                 </div>
 
                 <div>
@@ -4592,23 +4643,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    NIT o Cédula (Solo Números) <span className="text-red-500">*</span>
+                    NIT o Cédula (máx. 10 dígitos) <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     required
                     inputMode="numeric"
                     pattern="[0-9]*"
+                    maxLength={10}
                     value={editingClient.identification || ''}
                     onChange={(e) =>
                       setEditingClient({
                         ...editingClient,
-                        identification: e.target.value.replace(/\D/g, ''),
+                        identification: e.target.value.replace(/\D/g, '').slice(0, 10),
                       })
                     }
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl font-mono focus:ring-1 focus:ring-blue-500 focus:outline-hidden"
                   />
-                  <span className="text-[10px] text-slate-500 mt-0.5 block">Solo dígitos numéricos</span>
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">Solo números, máximo 10 dígitos</span>
                 </div>
 
                 <div>
@@ -4638,24 +4690,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Teléfono / Celular (Solo Números) <span className="text-red-500">*</span>
+                    Teléfono / Celular (máx. 10 dígitos) <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="tel"
                     required
                     inputMode="numeric"
                     pattern="[0-9]*"
-                    maxLength={15}
+                    maxLength={10}
                     value={editingClient.phone || ''}
                     onChange={(e) =>
                       setEditingClient({
                         ...editingClient,
-                        phone: e.target.value.replace(/\D/g, ''),
+                        phone: e.target.value.replace(/\D/g, '').slice(0, 10),
                       })
                     }
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl font-medium focus:ring-1 focus:ring-blue-500 focus:outline-hidden"
                   />
-                  <span className="text-[10px] text-slate-500 mt-0.5 block">Solo dígitos numéricos</span>
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">Solo números, máximo 10 dígitos</span>
                 </div>
 
                 <div>

@@ -248,14 +248,14 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
     }
 
     const cleanId = identification.trim().replace(/\D/g, '');
-    if (cleanId.length !== 10) {
-      setError('El NIT o Cédula de Ciudadanía debe tener exactamente 10 números (solo dígitos).');
+    if (!cleanId || cleanId.length > 10) {
+      setError('El NIT o Cédula de Ciudadanía debe contener solo números y máximo 10 dígitos.');
       return;
     }
 
     const cleanPhone = phone.trim().replace(/\D/g, '');
-    if (cleanPhone.length !== 10) {
-      setError('El teléfono / WhatsApp de contacto debe tener exactamente 10 números (solo dígitos).');
+    if (!cleanPhone || cleanPhone.length > 10) {
+      setError('El teléfono / WhatsApp de contacto debe contener solo números y máximo 10 dígitos.');
       return;
     }
 
@@ -340,14 +340,14 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
         company: newUser.company,
       });
 
-      // 2. Si el correo ingresado es de Gmail o no hay token de Google activo, intentar conectar Google para despacho automático
-      if (!isGoogleConnected()) {
-        try {
-          await ensureGoogleAccessToken();
-        } catch (gErr) {
-          console.info('Autorización de Google omitida en envío de formulario:', gErr);
-        }
-      }
+      // 2. Disparar evento para actualización inmediata en la ventana actual
+      try {
+        window.dispatchEvent(
+          new CustomEvent('colorlink-client-updated', {
+            detail: { ...newUser, identification: fullId, address: fullAddress },
+          })
+        );
+      } catch {}
 
       // 3. ENVIAR CORREO OFICIAL AL CLIENTE (con soporte para Gmail API o Webmail directo)
       const sentWelcome = await sendWelcomeEmail(newUser, {
@@ -684,7 +684,7 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
           />
           <Field
             id="register-id"
-            label="NIT o Cédula de Ciudadanía (10 dígitos) *"
+            label="NIT o Cédula de Ciudadanía (máx. 10 dígitos) *"
             value={identification}
             onChange={(e) => {
               const numericOnly = e.target.value.replace(/\D/g, '').slice(0, 10);
@@ -697,16 +697,16 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
               ) {
                 return;
               }
-              if (!/^[0-9]$/.test(e.key) || identification.length >= 10) {
+              if (!/^[0-9]$/.test(e.key)) {
                 e.preventDefault();
               }
             }}
             inputMode="numeric"
             pattern="[0-9]*"
             maxLength={10}
-            placeholder="Ej. 1098765432 (10 dígitos)"
+            placeholder="Ej. 1098765432 (hasta 10 dígitos)"
             icon={<ShieldCheck className="w-4 h-4" />}
-            hint="Permite exactamente 10 números (sin letras ni signos)"
+            hint="Solo números, máximo 10 dígitos (puedes ingresar menos)"
             required
           />
         </div>
@@ -725,7 +725,7 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
 
           <Field
             id="register-phone"
-            label="Teléfono / WhatsApp de Contacto (10 dígitos) *"
+            label="Teléfono / WhatsApp de Contacto (máx. 10 dígitos) *"
             type="tel"
             value={phone}
             onChange={(e) => {
@@ -739,16 +739,16 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
               ) {
                 return;
               }
-              if (!/^[0-9]$/.test(e.key) || phone.length >= 10) {
+              if (!/^[0-9]$/.test(e.key)) {
                 e.preventDefault();
               }
             }}
             inputMode="numeric"
             pattern="[0-9]*"
             maxLength={10}
-            placeholder="Ej. 3001234567 (10 dígitos)"
+            placeholder="Ej. 3001234567 (hasta 10 dígitos)"
             icon={<Phone className="w-4 h-4" />}
-            hint="Permite exactamente 10 números (solo dígitos)"
+            hint="Solo números, máximo 10 dígitos (puedes ingresar menos)"
             required
           />
         </div>

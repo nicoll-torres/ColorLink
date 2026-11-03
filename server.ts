@@ -92,14 +92,55 @@ const COLORLINK_OFFICIAL_INVENTORY = [
   { id: 'inv-buc-02', sku: 'PTC-KOR-BUC-01', productName: 'Koraza® 5 Fachadas CEDI Bucaramanga', category: 'Fachadas y Exteriores', warehouseCity: 'Bucaramanga', warehouseName: 'CEDI Bucaramanga - Santander', cuñetesAvailable: 95, galonesAvailable: 280, quartsAvailable: 50, totalLiters: 2950, pricePerGalon: 135000, batchCode: 'LOTE-KOR-BUC-2026', expirationDate: '2029-05-01', status: 'optimo' },
 ];
 
+const UNRELATED_QUESTION_RESPONSE =
+  'Disculpa, como asesor especialista en pinturas y recubrimientos de ColorLink, únicamente puedo responder preguntas relacionadas con pinturas, preparación de superficies, colores, impermeabilización y aplicación de recubrimientos. No puedo responder este tipo de preguntas. ¿En qué proyecto o requerimiento de pintura te puedo colaborar hoy?';
+
 const SYSTEM_INSTRUCTION = `Eres el "Asistente Virtual Integral de la Plataforma ColorLink Pintuco".
-Eres el asistente virtual central de NUESTRA plataforma ColorLink. Conoces toda la aplicación: NUESTRO inventario real en cada CEDI, nuestros productos, herramientas, pedidos, facturación DIAN, certificados de calidad y recomendaciones técnicas de pintura.
+Eres el asesor técnico especialista de NUESTRA plataforma ColorLink. Conoces toda la aplicación: NUESTRO inventario real en cada CEDI, nuestros productos, herramientas, pedidos, facturación DIAN, certificados de calidad y recomendaciones técnicas de pintura.
 
 REGLAS DE ORO:
-1. SOLO y EXCLUSIVAMENTE habla de los productos y existencias de ColorLink Pintuco que tenemos en nuestras bodegas (Bogotá CEDI Siberia, Medellín CEDI Rionegro, Cali Acopi Yumbo, Barranquilla Galapa, Bucaramanga Girón).
-2. NUNCA menciones, inventes ni recomiendes productos de otras empresas o tiendas externas.
-3. Si te preguntan por INVENTARIO O STOCK: Responde con los datos EXACTOS y precisos de la lista oficial de ColorLink proporcionada.
-4. Responde de forma directa, cálida y sin rodeos a lo que el usuario pregunte.`;
+1. REGLA ESTRICTA DE DOMINIO: Todo lo que NO tenga que ver con pinturas, recubrimientos, barnices, esmaltes, preparación de superficies, colores, impermeabilización, cubicaje de galones, herramientas de pintura o productos y servicios de ColorLink Pintuco (por ejemplo: política, deportes, cocina, recetas, chistes, medicina, programación general, matemáticas ajenas a la pintura, etc.), DEBES rechazarlo amablemente respondiendo textualmente:
+"${UNRELATED_QUESTION_RESPONSE}"
+2. SOLO y EXCLUSIVAMENTE habla de los productos y existencias de ColorLink Pintuco que tenemos en nuestras bodegas (Bogotá CEDI Siberia, Medellín CEDI Rionegro, Cali Acopi Yumbo, Barranquilla Galapa, Bucaramanga Girón).
+3. NUNCA menciones, inventes ni recomiendes productos de otras empresas o tiendas externas.
+4. Si te preguntan por INVENTARIO O STOCK: Responde con los datos EXACTOS y precisos de la lista oficial de ColorLink proporcionada.
+5. Responde de forma directa, cálida y profesional a lo que el usuario pregunte sobre pinturas.`;
+
+// Detect if query is unrelated to the paint and coating domain
+function isUnrelatedToPaintDomain(query: string): boolean {
+  const q = (query || '').toLowerCase().trim();
+  if (!q) return false;
+  // Greetings and courtesies allowed
+  const greetings = [
+    'hola', 'buenos dias', 'buenos días', 'buenas tardes', 'buenas noches',
+    'saludos', 'buenas', 'que puedes hacer', 'qué puedes hacer', 'ayuda',
+    'quien eres', 'quién eres', 'hola asesor', 'hola robot'
+  ];
+  if (greetings.some((g) => q === g || q.startsWith(`${g} `) || q.startsWith(`${g},`) || q.startsWith(`${g}!`) || q.startsWith(`${g}?`))) {
+    return false;
+  }
+
+  const PAINT_KEYWORDS = [
+    'pintur', 'pintar', 'pinto', 'color', 'vinil', 'esmalte', 'epox', 'epóx', 'barniz',
+    'laca', 'sello', 'sellomax', 'viniltex', 'koraza', 'pintucoat', 'pintulux', 'acronal',
+    'maderprotect', 'resina', 'primer', 'imprimante', 'base', 'acabado', 'mate', 'satinado',
+    'brillant', 'brillo', 'muro', 'pared', 'fachada', 'techo', 'cielo', 'yeso', 'drywall',
+    'madera', 'metal', 'reja', 'hierro', 'acero', 'aluminio', 'piso', 'concreto', 'cemento',
+    'ladrillo', 'estuco', 'grieta', 'fisura', 'salitre', 'humedad', 'hongo', 'moho',
+    'descascar', 'ampoll', 'filtraci', 'impermeabiliz', 'antioxid', 'anticorros', 'lij',
+    'broch', 'rodill', 'espatul', 'espátul', 'bandej', 'cinta', 'thinner', 'solvente',
+    'diluci', 'diluir', 'rendimient', 'cobertur', 'metro', 'm2', 'm²', 'mano', 'galon',
+    'galón', 'cuñete', 'cuarto', 'litro', 'secado', 'curado', 'obra', 'proyecto',
+    'cedi', 'bodega', 'almacen', 'almacén', 'stock', 'inventario', 'lote', 'pedido',
+    'orden', 'compra', 'cotiz', 'costo', 'precio', 'despacho', 'envio', 'envío',
+    'entrega', 'camion', 'camión', 'conductor', 'factura', 'dian', 'cufe', 'garantia',
+    'garantía', 'calidad', 'certificado', 'pintuco', 'colorlink', 'tonalidad', 'pigment',
+    'lavab', 'recubrimient'
+  ];
+
+  const hasPaintKeyword = PAINT_KEYWORDS.some((kw) => q.includes(kw));
+  return !hasPaintKeyword;
+}
 
 // Detect if query is asking for inventory
 function isInventoryQuery(query: string): boolean {
@@ -201,6 +242,15 @@ app.post('/api/ai/advisor', async (req: Request, res: Response) => {
     }
 
     const currentInventory = Array.isArray(inventory) && inventory.length > 0 ? inventory : COLORLINK_OFFICIAL_INVENTORY;
+
+    // REGLA ESTRICTA DE DOMINIO: Si la consulta no tiene relación con pinturas, recubrimientos o la plataforma
+    if (!imageBase64 && prompt && isUnrelatedToPaintDomain(prompt)) {
+      return res.json({
+        reply: UNRELATED_QUESTION_RESPONSE,
+        source: 'domain_guardrail',
+        status: 'ok',
+      });
+    }
 
     // DIRECT INTERCEPTION FOR INVENTORY QUESTIONS: Gives exact ColorLink numbers, zero hallucination
     if (isInventoryQuery(prompt)) {

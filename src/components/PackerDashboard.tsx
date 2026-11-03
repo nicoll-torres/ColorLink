@@ -44,13 +44,18 @@ export const PackerDashboard: React.FC<PackerDashboardProps> = ({
   onUpdateRequest,
   onOpenCalculator,
 }) => {
-  // REGLA ESTRICTA: El empacador SOLO puede ver los pedidos de su misma Ciudad principal
+  // Sede CEDI y filtro de pedidos (por defecto 'todos' para ver pedidos de cualquier cliente y dispositivo)
+  const [selectedCityFilter, setSelectedCityFilter] = useState<string>('todos');
   const packerCity = currentUser.city || 'Medellín';
+
   const cityRequests = useMemo(() => {
+    if (selectedCityFilter === 'todos') {
+      return requests;
+    }
     return requests.filter(
-      (r) => isSameCity(r.city, packerCity) || isSameCity(r.inventoryAllocation?.warehouseCity, packerCity)
+      (r) => isSameCity(r.city, selectedCityFilter) || isSameCity(r.inventoryAllocation?.warehouseCity, selectedCityFilter)
     );
-  }, [requests, packerCity]);
+  }, [requests, selectedCityFilter]);
 
   const [selectedReqId, setSelectedReqId] = useState<string>(cityRequests[0]?.id || '');
   const [search, setSearch] = useState('');
@@ -451,10 +456,11 @@ export const PackerDashboard: React.FC<PackerDashboardProps> = ({
   };
 
   const filteredRequests = cityRequests.filter((r) => {
-    const matchesSearch =
-      r.requestCode.toLowerCase().includes(search.toLowerCase()) ||
-      r.clientName.toLowerCase().includes(search.toLowerCase()) ||
-      r.city.toLowerCase().includes(search.toLowerCase());
+    const q = (search || '').toLowerCase();
+    const reqCode = (r.requestCode || '').toLowerCase();
+    const cName = (r.clientName || '').toLowerCase();
+    const cCity = (r.city || '').toLowerCase();
+    const matchesSearch = !q || reqCode.includes(q) || cName.includes(q) || cCity.includes(q);
     if (!matchesSearch) return false;
 
     const isPacked = r.packagingDetails?.status === 'empacado_listo';
@@ -622,6 +628,36 @@ export const PackerDashboard: React.FC<PackerDashboardProps> = ({
               <span className="text-xs text-slate-500 font-mono">
                 {filteredRequests.length} de {cityRequests.length} en {packerCity}
               </span>
+            </div>
+
+            {/* Selector de Sede CEDI */}
+            <div className="mb-3 space-y-1.5">
+              <span className="text-[10px] font-mono text-slate-500 uppercase block font-semibold">
+                Sede CEDI de Alistamiento:
+              </span>
+              <div className="flex flex-wrap gap-1 p-1 bg-slate-100 rounded-lg">
+                {[
+                  { id: 'todos', label: 'Todas (Nacional)' },
+                  { id: 'Medellín', label: 'Medellín' },
+                  { id: 'Bogotá D.C.', label: 'Bogotá' },
+                  { id: 'Cali', label: 'Cali' },
+                  { id: 'Barranquilla', label: 'Barranquilla' },
+                  { id: 'Bucaramanga', label: 'Bucaramanga' },
+                ].map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setSelectedCityFilter(c.id)}
+                    className={`px-2 py-1 rounded text-[10.5px] font-semibold whitespace-nowrap cursor-pointer transition-colors ${
+                      selectedCityFilter === c.id
+                        ? 'bg-amber-700 text-white shadow-2xs'
+                        : 'text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Buscador y Filtro */}

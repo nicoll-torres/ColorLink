@@ -43,13 +43,18 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
   onUpdateRequest,
   onOpenCertificate,
 }) => {
-  // REGLA ESTRICTA: El conductor SOLO puede ver los pedidos de su misma Ciudad principal
+  // Sede CEDI y filtro de pedidos (por defecto 'todos' para ver despachos de cualquier cliente y dispositivo)
+  const [selectedCityFilter, setSelectedCityFilter] = useState<string>('todos');
   const driverCity = currentUser.city || 'Medellín';
+
   const cityRequests = useMemo(() => {
+    if (selectedCityFilter === 'todos') {
+      return requests;
+    }
     return requests.filter(
-      (r) => isSameCity(r.city, driverCity) || isSameCity(r.inventoryAllocation?.warehouseCity, driverCity)
+      (r) => isSameCity(r.city, selectedCityFilter) || isSameCity(r.inventoryAllocation?.warehouseCity, selectedCityFilter)
     );
-  }, [requests, driverCity]);
+  }, [requests, selectedCityFilter]);
 
   const [selectedReqId, setSelectedReqId] = useState<string>(cityRequests[0]?.id || '');
   const [search, setSearch] = useState('');
@@ -119,10 +124,11 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
   }, [selectedReqId, selectedRequest]);
 
   const filteredRequests = cityRequests.filter((r) => {
-    const matchesSearch =
-      r.requestCode.toLowerCase().includes(search.toLowerCase()) ||
-      r.clientName.toLowerCase().includes(search.toLowerCase()) ||
-      r.city.toLowerCase().includes(search.toLowerCase());
+    const q = (search || '').toLowerCase();
+    const reqCode = (r.requestCode || '').toLowerCase();
+    const cName = (r.clientName || '').toLowerCase();
+    const cCity = (r.city || '').toLowerCase();
+    const matchesSearch = !q || reqCode.includes(q) || cName.includes(q) || cCity.includes(q);
     if (!matchesSearch) return false;
 
     const isPacked = r.packagingDetails?.status === 'empacado_listo';
@@ -393,13 +399,43 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
               </span>
             </div>
 
+            {/* Selector de Sede CEDI / Cobertura Nacional */}
+            <div className="mb-3 space-y-1.5">
+              <span className="text-[10px] font-mono text-slate-500 uppercase block font-semibold">
+                Sede de Ruta y Despacho:
+              </span>
+              <div className="flex flex-wrap gap-1 p-1 bg-slate-100 rounded-lg">
+                {[
+                  { id: 'todos', label: 'Todas las Rutas (Nacional)' },
+                  { id: 'Medellín', label: 'Medellín' },
+                  { id: 'Bogotá D.C.', label: 'Bogotá' },
+                  { id: 'Cali', label: 'Cali' },
+                  { id: 'Barranquilla', label: 'Barranquilla' },
+                  { id: 'Bucaramanga', label: 'Bucaramanga' },
+                ].map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setSelectedCityFilter(c.id)}
+                    className={`px-2 py-1 rounded text-[10.5px] font-semibold whitespace-nowrap cursor-pointer transition-colors ${
+                      selectedCityFilter === c.id
+                        ? 'bg-emerald-800 text-white shadow-2xs'
+                        : 'text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Buscador & Filtros */}
             <div className="space-y-2 mb-3">
               <div className="relative">
                 <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
-                  placeholder={`Buscar en ${driverCity} por código o cliente...`}
+                  placeholder="Buscar orden, cliente o ciudad de entrega..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-emerald-500"

@@ -433,7 +433,7 @@ export const INITIAL_REQUESTS: PaintRequest[] = [
         id: 'msg-seed-1',
         senderRole: 'conductor',
         senderName: 'Wilson Cañas (Conductor)',
-        message: 'Hola Constructora Bolívar, te saluda Wilson Cañas. Tengo cargado tu pedido PTC-2026-8841 en el camión WTL-582. Salgo del CEDI hacia El Poblado.',
+        message: 'Hola, voy en camino a la dirección de entrega con tu pedido. Salgo hacia allá y quedo atento para coordinar el descargue.',
         timestamp: '11:20 AM',
         createdAtIso: '2026-08-30T11:20:00Z',
       },

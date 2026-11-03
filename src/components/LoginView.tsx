@@ -316,7 +316,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
     setError('');
     setIsLoading(true);
 
-    const normalizedEmail = email.trim().toLowerCase();
+    const cleanInput = email.trim().toLowerCase();
+    const cleanDigits = email.trim().replace(/\D/g, '');
 
     // 1. Obtener usuarios registrados localmente en localStorage (usuarios, operarios y clientes)
     let localUsers: UserProfile[] = [];
@@ -366,11 +367,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
           role: 'cliente',
           city: c.city || 'Medellín',
           address: c.address,
+          identification: c.identification,
         }));
       }
     } catch {}
 
-    // Consultar Google Cloud Firestore (Netlify app y multi-dispositivo)
+    // Consultar Google Cloud Firestore (Netlify app y multi-dispositivo en tiempo real)
     let cloudUsers: UserProfile[] = [];
     try {
       cloudUsers = await cloudFetchUsers();
@@ -384,9 +386,19 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
     // Combinar usuarios: nube Firestore, servidor, staff, clientes locales y demo
     const allUsers = [...staffUsers, ...clientUsers, ...cloudUsers, ...serverUsers, ...localUsers, ...DEMO_USERS];
-    let matchedUser = allUsers.find(
-      (u) => u.email.toLowerCase() === normalizedEmail
-    );
+    
+    // Coincidencia flexible: por correo electrónico O por Cédula / NIT O por teléfono
+    let matchedUser = allUsers.find((u) => {
+      const uEmail = (u.email || '').toLowerCase().trim();
+      const uId = ((u as any).identification || '').replace(/\D/g, '');
+      const uPhone = (u.phone || '').replace(/\D/g, '');
+      if (uEmail === cleanInput) return true;
+      if (cleanDigits && uId && uId === cleanDigits) return true;
+      if (cleanDigits && uPhone && uPhone === cleanDigits) return true;
+      return false;
+    });
+
+    const normalizedEmail = matchedUser?.email || cleanInput;
 
     // 2. Verificar en Supabase Cloud si hay cliente/conexión disponible
     const client = getSupabaseClient();
@@ -536,14 +548,14 @@ export const LoginView: React.FC<LoginViewProps> = ({
       <form onSubmit={handleSubmit} id="login-form" className="space-y-4">
         <Field
           id="login-email"
-          label="Correo electrónico"
-          type="email"
+          label="Correo Electrónico, NIT o Cédula"
+          type="text"
           value={email}
           onChange={(e) => {
             setEmail(e.target.value);
             if (error) setError('');
           }}
-          placeholder="ejemplo@colorlink.com"
+          placeholder="ejemplo@colorlink.com o NIT/Cédula"
           icon={<Mail className="w-4 h-4 text-blue-600" />}
           required
         />

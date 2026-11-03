@@ -6,7 +6,7 @@ import { RequestView } from './RequestView';
 import { InvoiceModal } from './InvoiceModal';
 import { OrderChatModal } from './OrderChatModal';
 import { sendChatMessageToServer } from '../syncService';
-import { cloudSendChatMessage } from '../cloudSync';
+import { cloudSendChatMessage, cloudSyncRequest } from '../cloudSync';
 import {
   getEmailsForUser,
   openInGmail,
@@ -731,25 +731,32 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
 
   // Filtrar estrictamente solo los pedidos que pertenecen a este cliente
   const clientRequests = requests.filter((r) => {
-    if (r.clientEmail && currentUser.email) {
-      if (r.clientEmail.toLowerCase() === currentUser.email.toLowerCase()) return true;
-    }
-    if (currentUser.email?.toLowerCase() === 'cliente@pintuco.com') {
+    const cEmail = (currentUser.email || '').toLowerCase().trim();
+    const rEmail = (r.clientEmail || '').toLowerCase().trim();
+    if (cEmail && rEmail && cEmail === rEmail) return true;
+
+    if (cEmail === 'cliente@pintuco.com') {
       return (
-        r.clientEmail === 'cliente@pintuco.com' ||
-        r.clientName?.toLowerCase().includes('luisa') ||
-        r.clientName?.toLowerCase().includes('bolívar')
+        rEmail === 'cliente@pintuco.com' ||
+        (r.clientName || '').toLowerCase().includes('luisa') ||
+        (r.clientName || '').toLowerCase().includes('bolívar')
       );
     }
-    if (r.clientName && currentUser.name && r.clientName.toLowerCase() === currentUser.name.toLowerCase()) {
+    const cName = (currentUser.name || '').toLowerCase().trim();
+    const rName = (r.clientName || '').toLowerCase().trim();
+    if (cName && rName && (cName === rName || rName.includes(cName) || cName.includes(rName))) {
       return true;
     }
+    const cPhone = (currentUser.phone || '').replace(/\D/g, '');
+    const rPhone = (r.clientPhone || '').replace(/\D/g, '');
+    if (cPhone && rPhone && cPhone === rPhone) return true;
     return false;
   });
 
   const selectedRequest = clientRequests.find((r) => r.id === selectedReqId) || clientRequests[0];
 
   const handleRequestCreated = (newReq: PaintRequest) => {
+    cloudSyncRequest(newReq).catch(console.warn);
     onSubmitRequest(newReq);
     setSelectedReqId(newReq.id);
     setActiveTab('mis_pedidos');
