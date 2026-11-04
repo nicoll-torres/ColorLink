@@ -305,21 +305,6 @@ async function pollForChanges() {
 }
 
 /**
- * =========================================================================
- * FUNCIONES DE COMPATIBILIDAD AÑADIDAS PARA RESOLVER REFERENCIAS DEL COMPILADOR
- * =========================================================================
- */
-export async function cloudSendChatMessage(requestId: string, messageText: string): Promise<boolean> {
-  console.info('[CloudSync Compatibility] Mensaje enviado simulado:', requestId, messageText);
-  return true;
-}
-
-export async function cloudSyncRequest(request: any): Promise<boolean> {
-  console.info('[CloudSync Compatibility] Sincronización forzada simulada:', request);
-  return true;
-}
-
-/**
  * Enviar un mensaje de chat para un pedido específico en la nube
  */
 export async function cloudSendChatMessage(requestId: string, message: any): Promise<boolean> {
@@ -349,3 +334,4 @@ export async function cloudSyncRequest(endpoint: string, options?: any): Promise
     return null;
   }
 }
+
