@@ -318,3 +318,34 @@ export async function cloudSyncRequest(request: any): Promise<boolean> {
   console.info('[CloudSync Compatibility] Sincronización forzada simulada:', request);
   return true;
 }
+
+/**
+ * Enviar un mensaje de chat para un pedido específico en la nube
+ */
+export async function cloudSendChatMessage(requestId: string, message: any): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/requests/${encodeURIComponent(requestId)}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message }),
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn('[CloudSync] Error enviando mensaje de chat:', err);
+    return false;
+  }
+}
+
+/**
+ * Función genérica de sincronización / petición (si aplica)
+ */
+export async function cloudSyncRequest(endpoint: string, options?: any): Promise<any> {
+  try {
+    const res = await fetch(`/api/sync/${endpoint}`, options);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (err) {
+    console.warn('[CloudSync] Error en cloudSyncRequest:', err);
+    return null;
+  }
+}
