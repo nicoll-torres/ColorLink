@@ -252,7 +252,67 @@ GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role,
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role, public;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role, public;
 
--- 2. Desactivar Row Level Security (RLS) en las 12 tablas
+-- 2. Asegurar existencia de tablas 'requests' y 'clients' para sincronización directa
+CREATE TABLE IF NOT EXISTS public.requests (
+  id TEXT PRIMARY KEY,
+  request_code TEXT,
+  client_name TEXT,
+  client_email TEXT,
+  client_phone TEXT,
+  status TEXT DEFAULT 'solicitud_recibida',
+  data JSONB,
+  payload JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.clients (
+  id TEXT PRIMARY KEY,
+  identification TEXT,
+  name TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  phone TEXT,
+  address TEXT,
+  company TEXT,
+  city TEXT DEFAULT 'Medellín',
+  password TEXT DEFAULT 'cliente123',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 3. Desactivar RLS o aplicar políticas globales en requests y clients
+ALTER TABLE IF EXISTS public.requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.clients ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "permitir_todo_requests" ON public.requests;
+DROP POLICY IF EXISTS "permitir_select_requests" ON public.requests;
+DROP POLICY IF EXISTS "permitir_insert_requests" ON public.requests;
+DROP POLICY IF EXISTS "permitir_update_requests" ON public.requests;
+DROP POLICY IF EXISTS "permitir_delete_requests" ON public.requests;
+
+CREATE POLICY "permitir_todo_requests"
+ON public.requests
+FOR ALL
+TO public, anon, authenticated
+USING (true)
+WITH CHECK (true);
+
+DROP POLICY IF EXISTS "permitir_todo_clients" ON public.clients;
+DROP POLICY IF EXISTS "permitir_select_clients" ON public.clients;
+DROP POLICY IF EXISTS "permitir_insert_clients" ON public.clients;
+DROP POLICY IF EXISTS "permitir_update_clients" ON public.clients;
+DROP POLICY IF EXISTS "permitir_delete_clients" ON public.clients;
+
+CREATE POLICY "permitir_todo_clients"
+ON public.clients
+FOR ALL
+TO public, anon, authenticated
+USING (true)
+WITH CHECK (true);
+
+-- 4. Desactivar Row Level Security (RLS) en todas las tablas del sistema
+ALTER TABLE IF EXISTS public.requests DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.clients DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.usuarios DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.canales DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.clientes DISABLE ROW LEVEL SECURITY;
@@ -266,7 +326,7 @@ ALTER TABLE IF EXISTS public.facturas DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.entregas DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.control_de_calidad DISABLE ROW LEVEL SECURITY;
 
--- 3. Crear políticas permisivas automáticas en todas las tablas para garantizar guardado
+-- 5. Crear políticas permisivas automáticas en todas las tablas del esquema public
 DO $$
 DECLARE
     tbl text;
@@ -524,6 +584,130 @@ export async function testSupabaseConnection(config?: { url: string; anonKey: st
 }
 
 /**
+ * Consulta todas las solicitudes y órdenes desde Supabase de forma GLOBAL
+ * SIN ningún filtro restrictivo por user_id ni sesión, garantizando que
+ * cualquier usuario autenticado o administrador vea la totalidad de los datos.
+ */
+export async function fetchRequestsFromSupabase(): Promise<{
+  success: boolean;
+  requests: PaintRequest[];
+  error?: string;
+}> {
+  const client = getSupabaseClient();
+  if (!client) {
+    return { success: false, requests: [] };
+  }
+
+  try {
+    // 1. Intentar consultar tabla directa 'requests' sin ningún filtro de usuario
+    const { data: directReqs, error: reqErr } = await client
+      .from('requests')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (!reqErr && Array.isArray(directReqs) && directReqs.length > 0) {
+      const parsed: PaintRequest[] = directReqs.map((row: any) => {
+        if (row.data && typeof row.data === 'object' && row.data.requestCode) {
+          return { ...row.data, id: row.id || row.data.id };
+        }
+        if (row.payload && typeof row.payload === 'object' && row.payload.requestCode) {
+          return { ...row.payload, id: row.id || row.payload.id };
+        }
+        return {
+          id: String(row.id || row.requestCode || `req-${Math.random()}`),
+          requestCode: row.requestCode || row.request_code || 'REQ-000',
+          createdAt: row.createdAt || row.created_at || new Date().toISOString(),
+          updatedAt: row.updatedAt || row.updated_at,
+          clientName: row.clientName || row.client_name || 'Cliente ColorLink',
+          clientEmail: row.clientEmail || row.client_email || 'cliente@pintuco.com',
+          clientPhone: row.clientPhone || row.client_phone || '3000000000',
+          deliveryAddress: row.deliveryAddress || row.delivery_address || 'Medellín, Colombia',
+          city: row.city || 'Medellín',
+          projectType: row.projectType || row.project_type || 'Residencial',
+          surfaceType: row.surfaceType || row.surface_type || 'mamposteria_interior',
+          environment: row.environment || 'interior',
+          areaM2: Number(row.areaM2 || row.area_m2 || 60),
+          colorName: row.colorName || row.color_name || 'Blanco Nieve',
+          colorHex: row.colorHex || row.color_hex || '#FFFFFF',
+          notes: row.notes || '',
+          requiresApplicationService: Boolean(row.requiresApplicationService ?? row.requires_application_service),
+          status: row.status || 'solicitud_recibida',
+          technicalCalculation: row.technicalCalculation || row.technical_calculation,
+          items: row.items,
+          packagingDetails: row.packagingDetails || row.packaging_details,
+          deliveryDetails: row.deliveryDetails || row.delivery_details,
+          chatMessages: row.chatMessages || row.chat_messages,
+        } as PaintRequest;
+      });
+      return { success: true, requests: parsed };
+    }
+
+    // 2. Si no hay tabla 'requests' o está vacía, consultar la tabla 'pedidos' relacional del ERD
+    const { data: pedidosData, error: pedErr } = await client
+      .from('pedidos')
+      .select(`
+        id_pedido,
+        codigo_orden,
+        estado,
+        created_at,
+        solicitudes (
+          id_solicitud,
+          detalles,
+          area_m2,
+          tipo_superficie,
+          color,
+          proyectos (
+            id_proyecto,
+            descripcion,
+            presupuesto,
+            clientes (
+              id_cliente,
+              nombre,
+              email,
+              telefono,
+              direccion
+            )
+          )
+        )
+      `)
+      .order('created_at', { ascending: false });
+
+    if (!pedErr && Array.isArray(pedidosData) && pedidosData.length > 0) {
+      const mapped: PaintRequest[] = pedidosData.map((p: any) => {
+        const sol = Array.isArray(p.solicitudes) ? p.solicitudes[0] : p.solicitudes;
+        const proj = sol ? (Array.isArray(sol.proyectos) ? sol.proyectos[0] : sol.proyectos) : null;
+        const cli = proj ? (Array.isArray(proj.clientes) ? proj.clientes[0] : proj.clientes) : null;
+
+        return {
+          id: p.id_pedido || `req-${p.codigo_orden}`,
+          requestCode: p.codigo_orden || 'REQ-000',
+          createdAt: p.created_at || new Date().toISOString(),
+          clientName: cli?.nombre || 'Cliente ColorLink',
+          clientEmail: cli?.email || 'cliente@pintuco.com',
+          clientPhone: cli?.telefono || '3000000000',
+          deliveryAddress: cli?.direccion || 'Medellín, Colombia',
+          city: cli?.direccion?.includes('Bogotá') ? 'Bogotá D.C.' : 'Medellín',
+          projectType: 'Residencial',
+          surfaceType: (sol?.tipo_superficie as any) || 'mamposteria_interior',
+          environment: 'interior',
+          areaM2: Number(sol?.area_m2 || 60),
+          colorName: sol?.color || 'Blanco Nieve',
+          notes: sol?.detalles || '',
+          requiresApplicationService: false,
+          status: p.estado || 'solicitud_recibida',
+        } as PaintRequest;
+      });
+      return { success: true, requests: mapped };
+    }
+
+    return { success: false, requests: [], error: reqErr?.message || pedErr?.message };
+  } catch (err: any) {
+    console.warn('[Supabase] Error al consultar pedidos globales:', err);
+    return { success: false, requests: [], error: err?.message };
+  }
+}
+
+/**
  * Guarda o sincroniza una solicitud / orden completa a través de las 12 tablas relacionales de Supabase.
  * Es completamente idempotente: actualiza si ya existe o inserta un registro nuevo.
  */
@@ -541,6 +725,21 @@ export async function syncPaintRequestToSupabase(req: PaintRequest): Promise<{
   }
 
   try {
+    // 0. Si existe la tabla directa 'requests', sincronizarla sin filtros de usuario
+    try {
+      await client.from('requests').upsert({
+        id: req.id,
+        request_code: req.requestCode,
+        client_name: req.clientName,
+        client_email: req.clientEmail,
+        client_phone: req.clientPhone,
+        status: req.status,
+        data: req,
+        created_at: req.createdAt || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'id' });
+    } catch {}
+
     // 1. Asegurar o insertar Cliente
     const { data: existingClient } = await client
       .from('clientes')
@@ -1384,12 +1583,27 @@ export async function fetchClientsFromSupabase(): Promise<{
   }
 
   try {
+    // 1. Intentar clientes (español)
     const { data, error } = await client
       .from('clientes')
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (error) {
+    if (!error && Array.isArray(data) && data.length > 0) {
+      return { success: true, clients: data };
+    }
+
+    // 2. Intentar clients (inglés)
+    const { data: dataEn, error: errEn } = await client
+      .from('clients')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (!errEn && Array.isArray(dataEn) && dataEn.length > 0) {
+      return { success: true, clients: dataEn };
+    }
+
+    if (error && errEn) {
       return { success: true, clients: localClients, error: error.message };
     }
     return { success: true, clients: data && data.length > 0 ? data : localClients };

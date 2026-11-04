@@ -105,6 +105,46 @@ export function generateExpertTechnicalResponse(
   const city = options.city || 'Bogotá D.C.';
   const hasImage = !!options.imageBase64;
 
+  const PAINT_KEYWORDS = [
+    'pintur', 'pintar', 'pinto', 'color', 'colores', 'vinil', 'esmalte', 'epox', 'epóx', 'barniz',
+    'laca', 'sello', 'sellomax', 'viniltex', 'koraza', 'pintucoat', 'pintulux', 'acronal',
+    'maderprotect', 'resina', 'primer', 'imprimante', 'base', 'acabado', 'mate', 'satinado',
+    'brillant', 'brillo', 'muro', 'pared', 'paredes', 'fachada', 'fachadas', 'techo', 'techos',
+    'cielo', 'yeso', 'drywall', 'madera', 'metal', 'reja', 'hierro', 'acero', 'aluminio',
+    'piso', 'concreto', 'cemento', 'ladrillo', 'estuco', 'grieta', 'fisura', 'salitre',
+    'humedad', 'hongo', 'moho', 'descascar', 'ampoll', 'filtraci', 'impermeabiliz', 'antioxid',
+    'anticorros', 'lij', 'broch', 'rodill', 'espatul', 'espátul', 'bandej', 'cinta',
+    'thinner', 'solvente', 'diluci', 'diluir', 'rendimient', 'cobertur', 'metro', 'm2', 'm²',
+    'mano', 'galon', 'galón', 'galones', 'cuñete', 'cuñetes', 'cuarto', 'litro', 'secado',
+    'curado', 'obra', 'proyecto', 'cedi', 'bodega', 'almacen', 'almacén', 'stock', 'inventario',
+    'lote', 'pedido', 'orden', 'compra', 'cotiz', 'costo', 'precio', 'despacho', 'envio', 'envío',
+    'entrega', 'camion', 'camión', 'conductor', 'factura', 'dian', 'cufe', 'garantia', 'garantía',
+    'calidad', 'certificado', 'pintuco', 'colorlink', 'tonalidad', 'pigment', 'lavab', 'recubrimient'
+  ];
+
+  const GREETINGS = [
+    'hola', 'buenos dias', 'buenos días', 'buenas tardes', 'buenas noches',
+    'saludos', 'buenas', 'que puedes hacer', 'qué puedes hacer', 'ayuda',
+    'quien eres', 'quién eres', 'hola asesor', 'hola robot'
+  ];
+
+  const isGreeting = GREETINGS.some((g) => q === g || q.startsWith(`${g} `) || q.startsWith(`${g},`) || q.startsWith(`${g}!`) || q.startsWith(`${g}?`));
+  const hasPaintKeyword = PAINT_KEYWORDS.some((kw) => q.includes(kw));
+
+  // Si no tiene imagen, no es saludo y no tiene palabras de pintura: rechazar amablemente
+  if (!hasImage && !isGreeting && !hasPaintKeyword) {
+    return {
+      reply: 'Disculpa, como asesor especialista en pinturas y recubrimientos de ColorLink, únicamente puedo responder preguntas relacionadas con pinturas, preparación de superficies, colores, impermeabilización y los productos de nuestro inventario oficial Pintuco. No puedo responder este tipo de preguntas ajenas a nuestro catálogo de pinturas. ¿En qué proyecto o requerimiento de pintura te puedo colaborar hoy?',
+      detectedProducts: [PINTUCO_PRODUCTS[0], PINTUCO_PRODUCTS[1]],
+      suggestedQuestions: [
+        '¿Cuántos galones necesito para mi proyecto?',
+        '¿Cómo tratar humedad y salitre en una pared?',
+        '¿Cuál es la diferencia entre Viniltex y Koraza?',
+        '¿Qué productos tienen en inventario disponible?',
+      ],
+    };
+  }
+
   // 1. IMAGE DIAGNOSTIC FLOW
   if (hasImage) {
     const isFloor = q.includes('piso') || q.includes('concreto') || q.includes('bodega');

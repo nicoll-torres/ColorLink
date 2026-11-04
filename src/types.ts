@@ -141,6 +141,7 @@ export interface PaintRequest {
   id: string;
   requestCode: string;
   createdAt: string;
+  updatedAt?: string;
   clientName: string;
   clientEmail: string;
   clientPhone: string;

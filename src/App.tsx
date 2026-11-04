@@ -202,6 +202,7 @@ export default function App() {
         if (Array.isArray(cloudClients) && cloudClients.length > 0) {
           try {
             localStorage.setItem('colorlink_clients', JSON.stringify(cloudClients));
+            window.dispatchEvent(new CustomEvent('colorlink-clients-synced', { detail: cloudClients }));
             window.dispatchEvent(new CustomEvent('colorlink-client-updated', { detail: cloudClients[0] }));
           } catch {}
         }
@@ -1013,6 +1014,24 @@ export default function App() {
     }
   }, [currentUser, view]);
 
+  const handleSwitchRole = (newRole: 'administrador' | 'empacador' | 'conductor' | 'cliente') => {
+    if (!currentUser) return;
+    const updatedUser = { ...currentUser, role: newRole };
+    setCurrentUser(updatedUser);
+    try {
+      localStorage.setItem('colorlink_current_user', JSON.stringify(updatedUser));
+      const usersRaw = localStorage.getItem('colorlink_users');
+      if (usersRaw) {
+        const uList: UserProfile[] = JSON.parse(usersRaw);
+        const idx = uList.findIndex((u) => u.email.toLowerCase() === updatedUser.email.toLowerCase());
+        if (idx >= 0) {
+          uList[idx].role = newRole;
+          localStorage.setItem('colorlink_users', JSON.stringify(uList));
+        }
+      }
+    } catch {}
+  };
+
   const getRoleBadge = (role?: string) => {
     switch (role) {
       case 'administrador':
@@ -1243,6 +1262,74 @@ export default function App() {
             /* USUARIO AUTENTICADO (ADMINISTRADOR, EMPACADOR, CONDUCTOR, CLIENTE):
                Pantalla completa y despejada sin BrandPanel lateral */
             <main className="min-h-[calc(100vh-45px)] w-full bg-[#f8fafc] p-3 sm:p-4 md:p-6 flex flex-col items-center" id="main-portal-content">
+              {/* Barra de Rol Multi-Dispositivo & Sincronización Global */}
+              <div className="w-full max-w-7xl mx-auto mb-4 flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200/90 shadow-2xs">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Sesión Activa:</span>
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${roleBadge.bg}`}>
+                    {roleBadge.icon}
+                    <span>{roleBadge.label}</span>
+                  </span>
+                  <span className="text-xs text-slate-500 font-mono truncate max-w-[200px]" title={currentUser.email}>
+                    {currentUser.email}
+                  </span>
+                  <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                    ● Datos Globales Visibles
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-xs font-semibold text-slate-500 hidden sm:inline">Cambiar vista de rol:</span>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchRole('administrador')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      currentUser.role === 'administrador'
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                    }`}
+                    title="Ver panel general con todos los pedidos, clientes, inventario y métricas"
+                  >
+                    Administrador
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchRole('empacador')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      currentUser.role === 'empacador'
+                        ? 'bg-sky-600 text-white shadow-xs'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                    }`}
+                    title="Ver pedidos listos para empaque en bodega CEDI"
+                  >
+                    Empacador
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchRole('conductor')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      currentUser.role === 'conductor'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                    }`}
+                    title="Ver pedidos en despacho y ruta logística"
+                  >
+                    Conductor
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchRole('cliente')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      currentUser.role === 'cliente'
+                        ? 'bg-slate-800 text-white shadow-xs'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                    }`}
+                    title="Ver portal de compras y catálogo de cliente"
+                  >
+                    Cliente
+                  </button>
+                </div>
+              </div>
+
               {currentUser.role === 'administrador' ? (
                 <AdminDashboard
                   currentUser={currentUser}

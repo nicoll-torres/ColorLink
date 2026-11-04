@@ -1175,7 +1175,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         return [updatedClient, ...prev];
       });
     };
+    const handleClientsSynced = (e: any) => {
+      const allClients = e.detail;
+      if (Array.isArray(allClients) && allClients.length > 0) {
+        setClientsList((prev) => {
+          const combined = [...prev];
+          for (const cc of allClients) {
+            const idx = combined.findIndex(
+              (p) =>
+                (p.id && p.id === cc.id) ||
+                (p.email && cc.email && p.email.toLowerCase() === cc.email.toLowerCase())
+            );
+            if (idx >= 0) {
+              combined[idx] = { ...combined[idx], ...cc };
+            } else {
+              combined.unshift(cc);
+            }
+          }
+          return combined;
+        });
+      }
+    };
     window.addEventListener('colorlink-client-updated', handleClientUpdated);
+    window.addEventListener('colorlink-clients-synced', handleClientsSynced);
 
     // Consultar clientes en la nube ColorLink
     fetchCloudClients().then((cloudClients) => {
@@ -1233,6 +1255,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     return () => {
       window.removeEventListener('colorlink-client-updated', handleClientUpdated);
+      window.removeEventListener('colorlink-clients-synced', handleClientsSynced);
     };
   }, [adminTab, supabaseConfig.connected]);
 

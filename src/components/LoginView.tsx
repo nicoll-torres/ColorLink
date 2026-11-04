@@ -18,7 +18,7 @@ import {
 import { getSupabaseClient } from '../supabase';
 import { sendPasswordRecoveryEmail, buildGmailComposeUrl } from '../emailService';
 import { googleSignIn } from '../googleAuth';
-import { fetchCloudUsers } from '../cloudSync';
+import { fetchCloudUsers, fetchCloudClients } from '../cloudSync';
 
 interface LoginViewProps {
   onLogin: (user: UserProfile) => void;
@@ -65,7 +65,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
       }
       const gUser = res.user;
       const gEmail = (gUser.email || '').toLowerCase().trim();
-      const gName = gUser.displayName || 'Cliente ColorLink';
+      const gName = gUser.displayName || 'Usuario ColorLink';
 
       let localUsers: UserProfile[] = [];
       try {
@@ -73,21 +73,85 @@ export const LoginView: React.FC<LoginViewProps> = ({
         if (stored) localUsers = JSON.parse(stored);
       } catch {}
 
-      let user = localUsers.find((u) => u.email.toLowerCase() === gEmail);
-      if (!user) {
-        user = {
-          id: 'usr-' + Math.random().toString(36).substring(2, 7),
-          name: gName,
-          email: gEmail,
-          password: 'google_user_auth',
-          phone: '',
-          company: 'Cliente Registrado',
-          role: 'cliente',
-          city: 'Medellín',
-        };
-        localUsers.unshift(user);
-        localStorage.setItem('colorlink_users', JSON.stringify(localUsers));
+      // 1. Consultar si el usuario ya existe en Supabase Cloud en la tabla 'usuarios'
+      let dbRole: any = null;
+      let dbCompany = 'Pintuco S.A.';
+      let dbPhone = '';
+      let dbCity = 'Medellín';
+      let dbId = '';
+
+      const supaClient = getSupabaseClient();
+      if (supaClient) {
+        try {
+          const { data: supaUser } = await supaClient
+            .from('usuarios')
+            .select('*')
+            .eq('email', gEmail)
+            .maybeSingle();
+
+          if (supaUser) {
+            dbRole = supaUser.rol;
+            dbCompany = supaUser.empresa || supaUser.direccion || dbCompany;
+            dbPhone = supaUser.telefono || dbPhone;
+            dbCity = supaUser.ciudad || dbCity;
+            dbId = supaUser.id_usuario;
+          }
+        } catch (supaErr) {
+          console.warn('[GoogleAuth] Error consultando rol en Supabase:', supaErr);
+        }
       }
+
+      // Si es un correo institucional de profesor, docente, admin o contiene palabras clave de gestión
+      const isAdminEmail =
+        gEmail.includes('admin') ||
+        gEmail.includes('profesor') ||
+        gEmail.includes('docente') ||
+        gEmail.includes('profe') ||
+        gEmail.includes('ucc.edu') ||
+        gEmail === 'admin@pintuco.com';
+      const isPackerEmail = gEmail.includes('empacador') || gEmail.includes('bodega');
+      const isDriverEmail = gEmail.includes('conductor') || gEmail.includes('transporte');
+
+      const existingLocal = localUsers.find((u) => u.email.toLowerCase() === gEmail);
+      const chosenRole =
+        dbRole ||
+        existingLocal?.role ||
+        (isAdminEmail ? 'administrador' : isPackerEmail ? 'empacador' : isDriverEmail ? 'conductor' : 'administrador'); // Por defecto administrador para cuentas evaluadoras
+
+      const user: UserProfile = {
+        id: dbId || existingLocal?.id || 'usr-' + Math.random().toString(36).substring(2, 7),
+        name: gName,
+        email: gEmail,
+        password: 'google_user_auth',
+        phone: dbPhone || existingLocal?.phone || '3000000000',
+        company: dbCompany || existingLocal?.company || 'Pintuco S.A. / ColorLink',
+        role: chosenRole,
+        city: dbCity || existingLocal?.city || 'Medellín',
+      };
+
+      // Guardar en usuarios de Supabase para que quede registrado en PostgreSQL
+      if (supaClient) {
+        try {
+          await supaClient
+            .from('usuarios')
+            .upsert(
+              {
+                nombre: user.name,
+                email: user.email,
+                telefono: user.phone,
+                rol: user.role,
+                estado: 'activo',
+              },
+              { onConflict: 'email' }
+            );
+        } catch {}
+      }
+
+      const updatedUsers = localUsers.filter((u) => u.email.toLowerCase() !== gEmail);
+      updatedUsers.unshift(user);
+      try {
+        localStorage.setItem('colorlink_users', JSON.stringify(updatedUsers));
+      } catch {}
 
       setIsLoading(false);
       onLogin(user);
@@ -365,6 +429,33 @@ export const LoginView: React.FC<LoginViewProps> = ({
               const updated = [inCloud, ...localUsers.filter((u) => u.email.toLowerCase() !== normalizedEmail)];
               localStorage.setItem('colorlink_users', JSON.stringify(updated));
             } catch {}
+          }
+        }
+
+        // Si aún no está en users, buscar en clients de la nube
+        if (!matchedUser) {
+          const cloudClients = await fetchCloudClients();
+          if (cloudClients && cloudClients.length > 0) {
+            const inClients = cloudClients.find(
+              (c) => (c.email || '').toLowerCase() === normalizedEmail
+            );
+            if (inClients) {
+              matchedUser = {
+                id: inClients.id,
+                name: inClients.name,
+                email: inClients.email,
+                password: inClients.password || 'cliente123',
+                phone: inClients.phone || '',
+                company: inClients.company || 'Cliente Registrado',
+                role: 'cliente',
+                city: inClients.city || 'Medellín',
+                address: inClients.address,
+              };
+              try {
+                const updated = [matchedUser, ...localUsers.filter((u) => u.email.toLowerCase() !== normalizedEmail)];
+                localStorage.setItem('colorlink_users', JSON.stringify(updated));
+              } catch {}
+            }
           }
         }
       } catch (err) {

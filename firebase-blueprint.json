@@ -1,0 +1,82 @@
+{
+  "entities": {
+    "request": {
+      "title": "PaintRequest",
+      "description": "Customer order and technical paint requirement",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "requestCode": { "type": "string" },
+        "clientName": { "type": "string" },
+        "clientEmail": { "type": "string" },
+        "clientPhone": { "type": "string" },
+        "status": { "type": "string" },
+        "totalCost": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "requestCode", "clientName", "status"]
+    },
+    "client": {
+      "title": "Client",
+      "description": "Registered customer profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "identification": { "type": "string" },
+        "company": { "type": "string" },
+        "city": { "type": "string" },
+        "address": { "type": "string" }
+      },
+      "required": ["id", "name", "email"]
+    },
+    "user": {
+      "title": "User",
+      "description": "System or client user for authentication",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string" },
+        "phone": { "type": "string" },
+        "company": { "type": "string" }
+      },
+      "required": ["id", "name", "email", "role"]
+    },
+    "inventoryItem": {
+      "title": "InventoryItem",
+      "description": "ColorLink warehouse inventory record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "productName": { "type": "string" },
+        "warehouseCity": { "type": "string" },
+        "cuñetesAvailable": { "type": "number" },
+        "galonesAvailable": { "type": "number" },
+        "pricePerGalon": { "type": "number" }
+      },
+      "required": ["id", "productName", "warehouseCity"]
+    }
+  },
+  "firestore": {
+    "/requests/{requestId}": {
+      "schema": "request",
+      "description": "Orders and paint requests shared across devices"
+    },
+    "/clients/{clientId}": {
+      "schema": "client",
+      "description": "Clients registered in the platform"
+    },
+    "/users/{userId}": {
+      "schema": "user",
+      "description": "Users and credentials for multi-device login"
+    },
+    "/inventory/{itemId}": {
+      "schema": "inventoryItem",
+      "description": "Real-time inventory levels by warehouse"
+    }
+  }
+}

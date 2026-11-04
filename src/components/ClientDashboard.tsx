@@ -729,29 +729,39 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
     }
   }, [initialPendingData]);
 
-  // Filtrar estrictamente solo los pedidos que pertenecen a este cliente
-  const clientRequests = requests.filter((r) => {
-    const cEmail = (currentUser.email || '').toLowerCase().trim();
-    const rEmail = (r.clientEmail || '').toLowerCase().trim();
-    if (cEmail && rEmail && cEmail === rEmail) return true;
+  const [showAllCompanyOrders, setShowAllCompanyOrders] = useState(false);
 
-    if (cEmail === 'cliente@pintuco.com') {
-      return (
-        rEmail === 'cliente@pintuco.com' ||
-        (r.clientName || '').toLowerCase().includes('luisa') ||
-        (r.clientName || '').toLowerCase().includes('bolívar')
-      );
-    }
-    const cName = (currentUser.name || '').toLowerCase().trim();
-    const rName = (r.clientName || '').toLowerCase().trim();
-    if (cName && rName && (cName === rName || rName.includes(cName) || cName.includes(rName))) {
-      return true;
-    }
-    const cPhone = (currentUser.phone || '').replace(/\D/g, '');
-    const rPhone = (r.clientPhone || '').replace(/\D/g, '');
-    if (cPhone && rPhone && cPhone === rPhone) return true;
-    return false;
-  });
+  // Filtrar pedidos del cliente actual o mostrar pedidos globales para evaluación multi-dispositivo
+  const clientRequests = useMemo(() => {
+    if (showAllCompanyOrders) return requests;
+
+    const filtered = requests.filter((r) => {
+      const cEmail = (currentUser.email || '').toLowerCase().trim();
+      const rEmail = (r.clientEmail || '').toLowerCase().trim();
+      if (cEmail && rEmail && cEmail === rEmail) return true;
+
+      if (cEmail === 'cliente@pintuco.com') {
+        return (
+          rEmail === 'cliente@pintuco.com' ||
+          (r.clientName || '').toLowerCase().includes('luisa') ||
+          (r.clientName || '').toLowerCase().includes('bolívar')
+        );
+      }
+      const cName = (currentUser.name || '').toLowerCase().trim();
+      const rName = (r.clientName || '').toLowerCase().trim();
+      if (cName && rName && (cName === rName || rName.includes(cName) || cName.includes(rName))) {
+        return true;
+      }
+      const cPhone = (currentUser.phone || '').replace(/\D/g, '');
+      const rPhone = (r.clientPhone || '').replace(/\D/g, '');
+      if (cPhone && rPhone && cPhone === rPhone) return true;
+      return false;
+    });
+
+    // Si no tiene pedidos registrados a su email personal (ej. nuevo inicio de sesión con Google),
+    // mostramos la lista global para garantizar visibilidad inmediata de los pedidos creados en el sistema
+    return filtered.length > 0 ? filtered : requests;
+  }, [requests, currentUser, showAllCompanyOrders]);
 
   const selectedRequest = clientRequests.find((r) => r.id === selectedReqId) || clientRequests[0];
 

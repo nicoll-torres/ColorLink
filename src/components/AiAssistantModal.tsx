@@ -155,6 +155,60 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
     reader.readAsDataURL(file);
   };
 
+  const UNRELATED_QUESTION_RESPONSE =
+    'Disculpa, como asesor especialista en pinturas y recubrimientos de ColorLink, únicamente puedo responder preguntas relacionadas con pinturas, preparación de superficies, colores, impermeabilización y los productos de nuestro inventario oficial Pintuco. No puedo responder este tipo de preguntas ajenas a nuestro catálogo de pinturas. ¿En qué proyecto o requerimiento de pintura te puedo colaborar hoy?';
+
+  const isUnrelatedToPaintDomain = (query: string): boolean => {
+    const q = (query || '').toLowerCase().trim();
+    if (!q) return false;
+    const greetings = [
+      'hola', 'buenos dias', 'buenos días', 'buenas tardes', 'buenas noches',
+      'saludos', 'buenas', 'que puedes hacer', 'qué puedes hacer', 'ayuda',
+      'quien eres', 'quién eres', 'hola asesor', 'hola robot'
+    ];
+    if (greetings.some((g) => q === g || q.startsWith(`${g} `) || q.startsWith(`${g},`) || q.startsWith(`${g}!`) || q.startsWith(`${g}?`))) {
+      return false;
+    }
+
+    const PAINT_KEYWORDS = [
+      'pintur', 'pintar', 'pinto', 'color', 'colores', 'vinil', 'esmalte', 'epox', 'epóx', 'barniz',
+      'laca', 'sello', 'sellomax', 'viniltex', 'koraza', 'pintucoat', 'pintulux', 'acronal',
+      'maderprotect', 'resina', 'primer', 'imprimante', 'base', 'acabado', 'mate', 'satinado',
+      'brillant', 'brillo', 'muro', 'pared', 'paredes', 'fachada', 'fachadas', 'techo', 'techos',
+      'cielo', 'yeso', 'drywall', 'madera', 'metal', 'reja', 'hierro', 'acero', 'aluminio',
+      'piso', 'concreto', 'cemento', 'ladrillo', 'estuco', 'grieta', 'fisura', 'salitre',
+      'humedad', 'hongo', 'moho', 'descascar', 'ampoll', 'filtraci', 'impermeabiliz', 'antioxid',
+      'anticorros', 'lij', 'broch', 'rodill', 'espatul', 'espátul', 'bandej', 'cinta',
+      'thinner', 'solvente', 'diluci', 'diluir', 'rendimient', 'cobertur', 'metro', 'm2', 'm²',
+      'mano', 'galon', 'galón', 'galones', 'cuñete', 'cuñetes', 'cuarto', 'litro', 'secado',
+      'curado', 'obra', 'proyecto', 'cedi', 'bodega', 'almacen', 'almacén', 'stock', 'inventario',
+      'lote', 'pedido', 'orden', 'compra', 'cotiz', 'costo', 'precio', 'despacho', 'envio', 'envío',
+      'entrega', 'camion', 'camión', 'conductor', 'factura', 'dian', 'cufe', 'garantia', 'garantía',
+      'calidad', 'certificado', 'pintuco', 'colorlink', 'tonalidad', 'pigment', 'lavab', 'recubrimient'
+    ];
+
+    const hasPaintKeyword = PAINT_KEYWORDS.some((kw) => q.includes(kw));
+    return !hasPaintKeyword;
+  };
+
+  const isInventoryQueryText = (query: string): boolean => {
+    const q = (query || '').toLowerCase();
+    return (
+      q.includes('inventario') ||
+      q.includes('stock') ||
+      q.includes('cuanto hay') ||
+      q.includes('cuánto hay') ||
+      q.includes('cuantos hay') ||
+      q.includes('cuántos hay') ||
+      q.includes('disponible') ||
+      q.includes('disponib') ||
+      q.includes('lote') ||
+      q.includes('existencia') ||
+      q.includes('unidades') ||
+      (q.includes('tenemos') && (q.includes('viniltex') || q.includes('koraza') || q.includes('rodillo') || q.includes('brocha') || q.includes('herramienta')))
+    );
+  };
+
   // Send message to Gemini server-side route
   const handleSend = async (textToSend?: string) => {
     const query = textToSend !== undefined ? textToSend : input;
@@ -176,6 +230,43 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
     setImageFileName(null);
     setIsTyping(true);
     setActiveTab('chat');
+
+    // 1. REGLA ESTRICTA DE DOMINIO: Si la pregunta NO es sobre pinturas, acabados ni inventario
+    if (!currentImage && isUnrelatedToPaintDomain(query)) {
+      setTimeout(() => {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `msg-${Date.now() + 1}`,
+            role: 'assistant',
+            content: UNRELATED_QUESTION_RESPONSE,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          },
+        ]);
+        setIsTyping(false);
+      }, 350);
+      return;
+    }
+
+    // 2. CONSULTA DIRECTA DE NUESTRO INVENTARIO
+    if (!currentImage && isInventoryQueryText(query)) {
+      setTimeout(() => {
+        const fallbackReply = generateClientFallback(query, null);
+        const detected = detectProductsInText(fallbackReply);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `msg-${Date.now() + 1}`,
+            role: 'assistant',
+            content: fallbackReply,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            detectedProducts: detected.length > 0 ? detected : undefined,
+          },
+        ]);
+        setIsTyping(false);
+      }, 350);
+      return;
+    }
 
     try {
       const response = await fetch('/api/ai/advisor', {
@@ -231,43 +322,6 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
     } finally {
       setIsTyping(false);
     }
-  };
-
-  const UNRELATED_QUESTION_RESPONSE =
-    'Disculpa, como asesor especialista en pinturas y recubrimientos de ColorLink, únicamente puedo responder preguntas relacionadas con pinturas, preparación de superficies, colores, impermeabilización y aplicación de recubrimientos. No puedo responder este tipo de preguntas. ¿En qué proyecto o requerimiento de pintura te puedo colaborar hoy?';
-
-  const isUnrelatedToPaintDomain = (query: string): boolean => {
-    const q = (query || '').toLowerCase().trim();
-    if (!q) return false;
-    const greetings = [
-      'hola', 'buenos dias', 'buenos días', 'buenas tardes', 'buenas noches',
-      'saludos', 'buenas', 'que puedes hacer', 'qué puedes hacer', 'ayuda',
-      'quien eres', 'quién eres', 'hola asesor', 'hola robot'
-    ];
-    if (greetings.some((g) => q === g || q.startsWith(`${g} `) || q.startsWith(`${g},`) || q.startsWith(`${g}!`) || q.startsWith(`${g}?`))) {
-      return false;
-    }
-
-    const PAINT_KEYWORDS = [
-      'pintur', 'pintar', 'pinto', 'color', 'vinil', 'esmalte', 'epox', 'epóx', 'barniz',
-      'laca', 'sello', 'sellomax', 'viniltex', 'koraza', 'pintucoat', 'pintulux', 'acronal',
-      'maderprotect', 'resina', 'primer', 'imprimante', 'base', 'acabado', 'mate', 'satinado',
-      'brillant', 'brillo', 'muro', 'pared', 'fachada', 'techo', 'cielo', 'yeso', 'drywall',
-      'madera', 'metal', 'reja', 'hierro', 'acero', 'aluminio', 'piso', 'concreto', 'cemento',
-      'ladrillo', 'estuco', 'grieta', 'fisura', 'salitre', 'humedad', 'hongo', 'moho',
-      'descascar', 'ampoll', 'filtraci', 'impermeabiliz', 'antioxid', 'anticorros', 'lij',
-      'broch', 'rodill', 'espatul', 'espátul', 'bandej', 'cinta', 'thinner', 'solvente',
-      'diluci', 'diluir', 'rendimient', 'cobertur', 'metro', 'm2', 'm²', 'mano', 'galon',
-      'galón', 'cuñete', 'cuarto', 'litro', 'secado', 'curado', 'obra', 'proyecto',
-      'cedi', 'bodega', 'almacen', 'almacén', 'stock', 'inventario', 'lote', 'pedido',
-      'orden', 'compra', 'cotiz', 'costo', 'precio', 'despacho', 'envio', 'envío',
-      'entrega', 'camion', 'camión', 'conductor', 'factura', 'dian', 'cufe', 'garantia',
-      'garantía', 'calidad', 'certificado', 'pintuco', 'colorlink', 'tonalidad', 'pigment',
-      'lavab', 'recubrimient'
-    ];
-
-    const hasPaintKeyword = PAINT_KEYWORDS.some((kw) => q.includes(kw));
-    return !hasPaintKeyword;
   };
 
   const generateClientFallback = (qText: string, hasImg: string | null): string => {
