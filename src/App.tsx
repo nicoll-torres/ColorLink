@@ -98,6 +98,16 @@ export default function App() {
             if (!r.chatMessages && r.id === 'req-001') {
               r.chatMessages = INITIAL_REQUESTS[0].chatMessages;
             }
+            if (r.chatMessages && Array.isArray(r.chatMessages)) {
+              const seen = new Set<string>();
+              r.chatMessages = r.chatMessages.filter((m) => {
+                if (!m) return false;
+                const key = m.id || `${m.senderRole}-${(m.message || '').trim()}-${m.timestamp}`;
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+              });
+            }
             return r;
           });
 
@@ -663,17 +673,30 @@ export default function App() {
       sendOrderDeliveredEmail(updated).catch(console.error);
     }
 
+    let cleanedReq = updated;
+    if (updated.chatMessages && Array.isArray(updated.chatMessages)) {
+      const seen = new Set<string>();
+      const deduped = updated.chatMessages.filter((m) => {
+        if (!m) return false;
+        const key = m.id || `${m.senderRole}-${(m.message || '').trim()}-${m.timestamp}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      cleanedReq = { ...updated, chatMessages: deduped };
+    }
+
     setRequests((prev) => {
-      const next = prev.map((req) => (req.id === updated.id ? updated : req));
+      const next = prev.map((req) => (req.id === cleanedReq.id ? cleanedReq : req));
       persistRequests(next);
       return next;
     });
-    if (currentRequest.id === updated.id) {
-      setCurrentRequest(updated);
+    if (currentRequest.id === cleanedReq.id) {
+      setCurrentRequest(cleanedReq);
     }
     // Sincronizar en la nube central ColorLink para todos los dispositivos y en Supabase
-    updateCloudRequest(updated).catch(console.warn);
-    syncPaintRequestToSupabase(updated);
+    updateCloudRequest(cleanedReq).catch(console.warn);
+    syncPaintRequestToSupabase(cleanedReq);
   };
 
   const handleSubmitRequest = (newReq: PaintRequest) => {

@@ -84,23 +84,39 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
   const [chatReqId, setChatReqId] = useState<string | null>(null);
 
   const handleSendMessage = (requestId: string, messageText: string) => {
+    const trimmed = (messageText || '').trim();
+    if (!trimmed) return;
+
     const req = requests.find((r) => r.id === requestId) || selectedRequest;
     if (!req) return;
 
     const now = new Date();
     const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const currentMsgs = req.chatMessages || [];
+
+    // Prevenir envío duplicado si el último mensaje ya es idéntico
+    const lastMsg = currentMsgs[currentMsgs.length - 1];
+    if (
+      lastMsg &&
+      lastMsg.senderRole === 'conductor' &&
+      lastMsg.message === trimmed &&
+      lastMsg.timestamp === timeStr
+    ) {
+      return;
+    }
+
     const newMsg: OrderChatMessage = {
-      id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       senderRole: 'conductor',
       senderName: currentUser.name || 'Wilson Cañas (Conductor)',
-      message: messageText,
+      message: trimmed,
       timestamp: timeStr,
       createdAtIso: now.toISOString(),
     };
 
     const updatedReq: PaintRequest = {
       ...req,
-      chatMessages: [...(req.chatMessages || []), newMsg],
+      chatMessages: [...currentMsgs, newMsg],
     };
 
     onUpdateRequest(updatedReq);

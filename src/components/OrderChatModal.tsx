@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { PaintRequest, OrderChatMessage } from '../types';
 import {
   Send,
@@ -33,6 +33,7 @@ export const OrderChatModal: React.FC<OrderChatModalProps> = ({
   onSendMessage,
 }) => {
   const [inputText, setInputText] = useState('');
+  const [isSending, setIsSending] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -51,8 +52,22 @@ export const OrderChatModal: React.FC<OrderChatModalProps> = ({
 
   const partnerPhone = isDriver ? request.clientPhone : (request.deliveryDetails?.driverPhone || '+57 311 754 9988');
 
-  // Messages list from request
-  const messages: OrderChatMessage[] = request.chatMessages || [];
+  // Messages list deduplicada para que NUNCA aparezca un mensaje repetido
+  const messages: OrderChatMessage[] = useMemo(() => {
+    const raw = request.chatMessages || [];
+    const seen = new Set<string>();
+    const unique: OrderChatMessage[] = [];
+
+    for (const msg of raw) {
+      if (!msg) continue;
+      const key = msg.id || `${msg.senderRole}-${(msg.message || '').trim()}-${msg.timestamp}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        unique.push(msg);
+      }
+    }
+    return unique;
+  }, [request.chatMessages]);
 
   // Scroll to bottom on new messages
   const scrollToBottom = () => {
@@ -70,9 +85,13 @@ export const OrderChatModal: React.FC<OrderChatModalProps> = ({
 
   const handleSend = (textToSend?: string) => {
     const text = (textToSend || inputText).trim();
-    if (!text) return;
+    if (!text || isSending) return;
+    setIsSending(true);
     onSendMessage(request.id, text);
     setInputText('');
+    setTimeout(() => {
+      setIsSending(false);
+    }, 450);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -333,9 +352,9 @@ export const OrderChatModal: React.FC<OrderChatModalProps> = ({
               <button
                 type="button"
                 onClick={() => handleSend()}
-                disabled={!inputText.trim()}
+                disabled={!inputText.trim() || isSending}
                 className={`w-9 h-9 rounded-full flex items-center justify-center transition-all shrink-0 cursor-pointer ${
-                  inputText.trim()
+                  inputText.trim() && !isSending
                     ? 'bg-[#25D366] hover:bg-[#1ebd5b] text-white shadow-md scale-105 active:scale-95'
                     : 'bg-slate-300 text-slate-500 cursor-not-allowed'
                 }`}

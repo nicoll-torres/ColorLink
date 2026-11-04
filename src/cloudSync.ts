@@ -831,10 +831,23 @@ export async function cloudSendChatMessage(requestId: string, message: any): Pro
       const list: PaintRequest[] = JSON.parse(local);
       const req = list.find((r) => r.id === requestId);
       if (req) {
-        req.chatMessages = [...(req.chatMessages || []), message];
-        req.updatedAt = new Date().toISOString();
-        localStorage.setItem('colorlink_requests', JSON.stringify(list));
-        await setDoc(docRef, req, { merge: true }).catch(() => {});
+        const currentMsgs = req.chatMessages || [];
+        const msgId = message.id;
+        const msgSig = `${message.senderRole || ''}-${(message.message || '').trim()}-${message.timestamp || ''}`;
+        
+        // Evitar duplicación: verificar si el mensaje ya está en la lista
+        const alreadyExists = currentMsgs.some(
+          (m: any) =>
+            (msgId && m.id === msgId) ||
+            (`${m.senderRole || ''}-${(m.message || '').trim()}-${m.timestamp || ''}` === msgSig)
+        );
+
+        if (!alreadyExists) {
+          req.chatMessages = [...currentMsgs, message];
+          req.updatedAt = new Date().toISOString();
+          localStorage.setItem('colorlink_requests', JSON.stringify(list));
+          await setDoc(docRef, req, { merge: true }).catch(() => {});
+        }
       }
     }
     return true;
