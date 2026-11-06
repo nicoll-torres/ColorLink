@@ -18,6 +18,7 @@ import {
   AlertCircle,
   X,
 } from '../icons';
+import { sendInvoiceCertificateEmail } from '../emailService';
 
 interface InvoiceModalProps {
   request: PaintRequest;
@@ -129,6 +130,25 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ request, onClose }) 
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [copiedCufe, setCopiedCufe] = useState(false);
   const invoicePrintRef = useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (request.clientEmail) {
+      sendInvoiceCertificateEmail(
+        request,
+        'factura',
+        {
+          id: request.clientId || 'client',
+          name: request.clientName || 'Cliente',
+          email: request.clientEmail,
+          password: '',
+          phone: request.clientPhone || '',
+          company: request.clientCompany || 'Cliente',
+          role: 'cliente',
+          city: request.city || 'Medellín',
+        }
+      ).catch(console.warn);
+    }
+  }, [request.id, request.clientEmail]);
 
   const calc = request.technicalCalculation;
   const rawSubtotal = request.items && request.items.length > 0

@@ -201,6 +201,18 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
         company: newUser.company,
       });
 
+      // Guardar en usuarios locales de ColorLink
+      let localUsers: UserProfile[] = [];
+      try {
+        const stored = localStorage.getItem('colorlink_users');
+        if (stored) localUsers = JSON.parse(stored);
+      } catch {}
+      const updatedUsers = localUsers.filter((u) => u.email.toLowerCase() !== newUser.email.toLowerCase());
+      updatedUsers.unshift(newUser);
+      try {
+        localStorage.setItem('colorlink_users', JSON.stringify(updatedUsers));
+      } catch {}
+
       // 3. Despachar correo oficial de bienvenida por Gmail API con el token recién obtenido
       const sentWelcome = await sendWelcomeEmail(newUser, {
         identification: fullId,
@@ -326,16 +338,28 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
         company: newUser.company,
       });
 
-      // 2. Si el correo ingresado es de Gmail o no hay token de Google activo, intentar conectar Google para despacho automático
+      // 3. Guardar en usuarios locales de ColorLink
+      let localUsers: UserProfile[] = [];
+      try {
+        const stored = localStorage.getItem('colorlink_users');
+        if (stored) localUsers = JSON.parse(stored);
+      } catch {}
+      const updatedUsers = localUsers.filter((u) => u.email.toLowerCase() !== newUser.email.toLowerCase());
+      updatedUsers.unshift(newUser);
+      try {
+        localStorage.setItem('colorlink_users', JSON.stringify(updatedUsers));
+      } catch {}
+
+      // 4. Si no hay token de Google activo en memoria, intentar conectarlo para despacho directo por Gmail API
       if (!isGoogleConnected()) {
         try {
           await ensureGoogleAccessToken();
         } catch (gErr) {
-          console.info('Autorización de Google omitida en envío de formulario:', gErr);
+          console.info('Autorización de Google omitida en envío manual:', gErr);
         }
       }
 
-      // 3. ENVIAR CORREO OFICIAL AL CLIENTE (con soporte para Gmail API o Webmail directo)
+      // 5. ENVIAR CORREO OFICIAL AL CLIENTE (con soporte para Gmail API o sincronización global)
       const sentWelcome = await sendWelcomeEmail(newUser, {
         identification: fullId,
         address: fullAddress,
@@ -510,6 +534,100 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
           </div>
         </div>
 
+        {/* Notificación Oficial Despachada al Correo del Cliente */}
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50/70 border border-blue-200 space-y-3.5 shadow-xs" id="welcome-email-delivery-card">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
+                <Mail className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-bold text-blue-950 text-xs sm:text-sm flex items-center gap-2">
+                  <span>Notificación Oficial Despachada al Correo</span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold">
+                    BIENVENIDA
+                  </span>
+                </h4>
+                <p className="text-[11px] text-blue-800">
+                  Destinatario registrado: <strong className="font-mono text-blue-950 font-bold">{userProfile.email}</strong>
+                </p>
+              </div>
+            </div>
+            {deliveryStatus === 'gmail_delivered' ? (
+              <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-2xs">
+                <span className="w-2 h-2 rounded-full bg-emerald-600 animate-ping" />
+                ✓ Entregado vía Google Gmail API
+              </span>
+            ) : deliveryStatus === 'network_delivered' ? (
+              <span className="text-[11px] font-bold text-blue-900 bg-blue-100 border border-blue-300 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-2xs">
+                <span className="w-2 h-2 rounded-full bg-blue-600" />
+                ✓ Sincronizado en la Red ColorLink
+              </span>
+            ) : (
+              <span className="text-[11px] font-bold text-sky-900 bg-sky-100 border border-sky-300 px-3 py-1 rounded-full flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-sky-600" />
+                ✓ Preparado & Sincronizado
+              </span>
+            )}
+          </div>
+
+          <div className="p-3 bg-white/90 rounded-xl border border-blue-100 text-xs text-slate-700 space-y-1">
+            <div className="flex items-center justify-between text-[11px] text-slate-500 border-b border-slate-100 pb-1">
+              <span><strong>Asunto:</strong> 🎨 ¡Bienvenido a ColorLink! Tu cuenta ha sido creada exitosamente</span>
+              <span className="font-mono text-[10px] text-blue-700 font-bold">Portal ColorLink S.A.</span>
+            </div>
+            <p className="text-[11px] text-slate-600 pt-1 leading-relaxed">
+              El correo incluye la bienvenida formal, verificación de contraseña de acceso, resumen de datos registrados y enlaces directos al catálogo y cubicaje técnico.
+            </p>
+          </div>
+
+          {/* Accesos directos para abrir en Gmail, Outlook o Copiar */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+            <a
+              href={gmailUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3.5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
+              title="Abrir en Gmail Web con el mensaje prellenado"
+            >
+              <Mail className="w-3.5 h-3.5" />
+              <span>Abrir en Gmail Web</span>
+              <ExternalLink className="w-3 h-3 text-red-200" />
+            </a>
+
+            <a
+              href={outlookUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3.5 py-2.5 rounded-xl bg-sky-700 hover:bg-sky-800 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
+              title="Abrir en Outlook Web"
+            >
+              <Mail className="w-3.5 h-3.5" />
+              <span>Abrir en Outlook</span>
+              <ExternalLink className="w-3 h-3 text-sky-200" />
+            </a>
+
+            <button
+              type="button"
+              onClick={() => handleCopyEmail(welcomeNotification)}
+              className="px-3.5 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
+              title="Copiar texto oficial del correo"
+            >
+              {copiedEmailText ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="text-emerald-700 font-bold">¡Texto Copiado!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5 text-slate-600" />
+                  <span>Copiar Mensaje Oficial</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
         {/* Matriz de Servicios Habilitados para el Cliente */}
         <div className="p-4 rounded-xl bg-blue-50/60 border border-blue-200 space-y-3">
           <div className="flex items-center gap-2 text-blue-950 font-bold text-xs">
@@ -656,6 +774,31 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
           <span>{error}</span>
         </div>
       )}
+
+      {/* Opción Rápida: Registrarse con Google para entrega directa a Gmail */}
+      <div className="space-y-3 pt-1">
+        <button
+          type="button"
+          onClick={handleRegisterWithGoogle}
+          disabled={isLoading}
+          className="w-full py-3 px-4 rounded-xl border border-blue-200 bg-white hover:bg-blue-50/80 text-blue-950 font-bold text-xs sm:text-sm flex items-center justify-center gap-3 shadow-xs hover:shadow transition-all cursor-pointer"
+          id="btn-register-with-google"
+        >
+          <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+          </svg>
+          <span>Registrarse con Google (Despacho Oficial Directo a tu Gmail)</span>
+        </button>
+
+        <div className="flex items-center gap-3 my-2">
+          <div className="h-px bg-slate-200 flex-1" />
+          <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">o ingresa tus datos en el formulario</span>
+          <div className="h-px bg-slate-200 flex-1" />
+        </div>
+      </div>
 
       <form onSubmit={handleSubmit} id="register-form" className="space-y-3">
         <div className="field-row">

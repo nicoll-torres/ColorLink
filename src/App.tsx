@@ -38,6 +38,7 @@ import {
   sendOrderDeliveredEmail,
   getEmailsForUser,
   getAllEmails,
+  initEmailSync,
 } from './emailService';
 import { syncPaintRequestToSupabase, syncAllInventoryToSupabase, getSupabaseConfig } from './supabase';
 import {
@@ -227,7 +228,12 @@ export default function App() {
       },
     });
 
-    return cleanup;
+    const cleanupEmails = initEmailSync();
+
+    return () => {
+      if (typeof cleanup === 'function') cleanup();
+      if (typeof cleanupEmails === 'function') cleanupEmails();
+    };
   }, []);
 
   // Selección pendiente desde la página de inicio o catálogo
@@ -630,13 +636,25 @@ export default function App() {
   const handleLogin = (user: UserProfile) => {
     setCurrentUser(user);
     setView('request');
+    // Si el usuario que ingresa es un cliente, verificar que cuente con su correo de bienvenida
+    if (user.role === 'cliente') {
+      const existing = getEmailsForUser(user.email);
+      const hasWelcome = existing.some((e) => e.category === 'bienvenida');
+      if (!hasWelcome) {
+        sendWelcomeEmail(user).catch(console.error);
+      }
+    }
   };
 
   const handleRegister = (user: UserProfile) => {
     setCurrentUser(user);
     setView('request');
-    // Disparar correo de bienvenida oficial de felicitaciones al cliente
-    sendWelcomeEmail(user).catch(console.error);
+    // Asegurar despacho de correo oficial de bienvenida sin duplicación
+    const existing = getEmailsForUser(user.email);
+    const hasWelcome = existing.some((e) => e.category === 'bienvenida');
+    if (!hasWelcome) {
+      sendWelcomeEmail(user).catch(console.error);
+    }
   };
 
   const handleLogout = () => {
@@ -700,17 +718,24 @@ export default function App() {
   };
 
   const handleSubmitRequest = (newReq: PaintRequest) => {
+    // Asegurar que el pedido tenga el correo registrado del cliente actual
+    const reqWithEmail: PaintRequest = {
+      ...newReq,
+      clientEmail: newReq.clientEmail || currentUser?.email || 'cliente@pintuco.com',
+      clientName: newReq.clientName || currentUser?.name || 'Cliente ColorLink',
+    };
+
     // 1. Guardar la solicitud y asignarla como activa
     setRequests((prev) => {
-      const next = [newReq, ...prev];
+      const next = [reqWithEmail, ...prev];
       persistRequests(next);
       return next;
     });
-    setCurrentRequest(newReq);
+    setCurrentRequest(reqWithEmail);
     setView('request');
 
-    // Disparar correo de nueva orden registrada
-    sendOrderCreatedEmail(newReq).catch(console.error);
+    // Disparar correo de nueva orden registrada al correo del cliente
+    sendOrderCreatedEmail(reqWithEmail).catch(console.error);
 
     // 2. DESCONTAR DEL INVENTARIO EN TIEMPO REAL:
     // Todo lo que pida el cliente se descuenta del inventario (unidades, galones, cuñetes y productos múltiples)
@@ -1454,6 +1479,7 @@ export default function App() {
       {isCalculatorOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <TechnicalCalculator
+            currentUser={currentUser}
             onClose={() => setIsCalculatorOpen(false)}
             onApplyCalculationToRequest={(surface, areaM2) => {
               if (!currentUser) {

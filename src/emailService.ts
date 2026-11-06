@@ -1,6 +1,8 @@
 import { EmailNotification, PaintRequest, UserProfile } from './types';
 import { getAccessToken } from './googleAuth';
 import { sendEmailViaGmailApi } from './gmailApiService';
+import { collection, doc, setDoc, onSnapshot } from 'firebase/firestore';
+import { db } from './firebase';
 
 const STORAGE_KEY = 'colorlink_sent_emails';
 
@@ -214,10 +216,40 @@ export async function sendEmail(
     console.warn('[ColorLink Mailer] Error despachando por backend:', backendErr);
   }
 
-  // Guardar en almacenamiento persistente
+  // Guardar en almacenamiento persistente local
   const existing = getAllEmails();
-  const updated = [newEmail, ...existing];
+  const updated = [newEmail, ...existing.filter((e) => e.id !== newEmail.id)];
   persistEmails(updated);
+
+  // Sincronizar en la nube global Firestore (para visibilidad multi-dispositivo)
+  try {
+    const emailDocRef = doc(db, 'emails', newEmail.id);
+    setDoc(
+      emailDocRef,
+      {
+        id: newEmail.id,
+        toEmail: (newEmail.toEmail || '').toLowerCase().trim(),
+        toName: newEmail.toName || 'Cliente ColorLink',
+        subject: newEmail.subject,
+        previewText: newEmail.previewText || '',
+        sentAt: newEmail.sentAt,
+        read: Boolean(newEmail.read),
+        dispatchedViaGmailApi: Boolean(newEmail.dispatchedViaGmailApi),
+        dispatchedViaNetwork: Boolean(newEmail.dispatchedViaNetwork),
+        gmailMessageId: newEmail.gmailMessageId || null,
+        category: newEmail.category || 'general',
+        requestCode: newEmail.requestCode || null,
+        htmlContent: newEmail.htmlContent || '',
+        metadata: newEmail.metadata || {},
+        _timestamp: Date.now(),
+      },
+      { merge: true }
+    ).catch((fsErr) => {
+      console.warn('[ColorLink Mailer] Error al persistir correo en Firestore:', fsErr);
+    });
+  } catch (syncErr) {
+    console.warn('[ColorLink Mailer] Falló invocación de setDoc Firestore:', syncErr);
+  }
 
   // Emitir evento global en la ventana para que la interfaz reaccione instantáneamente
   try {
@@ -236,11 +268,83 @@ export async function sendEmail(
   return newEmail;
 }
 
+let isEmailSyncActive = false;
+
+// Sincronización en tiempo real de correos entre múltiples dispositivos vía Firestore
+export function initEmailSync(): () => void {
+  if (isEmailSyncActive) return () => {};
+  isEmailSyncActive = true;
+
+  try {
+    const emailsCol = collection(db, 'emails');
+    const unsubscribe = onSnapshot(
+      emailsCol,
+      (snapshot) => {
+        const cloudEmails: EmailNotification[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data() as any;
+          if (data && data.id && data.toEmail) {
+            cloudEmails.push({
+              id: data.id,
+              toEmail: data.toEmail,
+              toName: data.toName || 'Cliente',
+              subject: data.subject || 'Notificación ColorLink',
+              previewText: data.previewText || '',
+              sentAt: data.sentAt || '',
+              read: Boolean(data.read),
+              dispatchedViaGmailApi: Boolean(data.dispatchedViaGmailApi),
+              dispatchedViaNetwork: Boolean(data.dispatchedViaNetwork),
+              gmailMessageId: data.gmailMessageId || null,
+              category: data.category || 'general',
+              requestCode: data.requestCode || null,
+              htmlContent: data.htmlContent || '',
+              metadata: data.metadata || {},
+            });
+          }
+        });
+
+        if (cloudEmails.length > 0) {
+          const local = getAllEmails();
+          const map = new Map<string, EmailNotification>();
+          // Registrar correos de la nube
+          cloudEmails.forEach((e) => map.set(e.id, e));
+          // Registrar correos locales que aún no hayan subido
+          local.forEach((e) => {
+            if (!map.has(e.id)) {
+              map.set(e.id, e);
+            }
+          });
+          const merged = Array.from(map.values()).sort((a, b) => {
+            return (b.sentAt || '').localeCompare(a.sentAt || '');
+          });
+          persistEmails(merged);
+          try {
+            window.dispatchEvent(
+              new CustomEvent('colorlink-email-sent', { detail: cloudEmails[0] })
+            );
+          } catch {}
+        }
+      },
+      (error) => {
+        console.warn('[ColorLink Mailer] Listener Firestore de correos error:', error);
+      }
+    );
+    return unsubscribe;
+  } catch (err) {
+    console.warn('[ColorLink Mailer] Error iniciando initEmailSync:', err);
+    return () => {};
+  }
+}
+
 // Marcar correo como leído
 export function markEmailAsRead(id: string): void {
   const existing = getAllEmails();
   const updated = existing.map((e) => (e.id === id ? { ...e, read: true } : e));
   persistEmails(updated);
+  try {
+    const emailRef = doc(db, 'emails', id);
+    setDoc(emailRef, { read: true }, { merge: true }).catch(() => {});
+  } catch {}
   window.dispatchEvent(new CustomEvent('colorlink-email-read', { detail: { id } }));
 }
 
@@ -878,6 +982,329 @@ export async function sendPasswordRecoveryEmail(
     metadata: {
       action: 'password_recovery',
       newPassword: newPasswordCode,
+    },
+  });
+}
+
+/**
+ * 4. Correo al realizar un Cálculo Técnico y Cubicación de Pintura
+ */
+export async function sendCalculationEmail(
+  calcData: {
+    surfaceType: string;
+    areaM2: number;
+    coats: number;
+    recommendedProduct: string;
+    cuñetes: number;
+    galones: number;
+    estimatedCostCOP: number;
+    primerName?: string;
+    primerGalons?: number;
+  },
+  clientUser: UserProfile
+): Promise<EmailNotification> {
+  const subject = `📐 Cálculo Técnico y Cubicación ColorLink: ${calcData.recommendedProduct}`;
+  const previewText = `Tu cálculo técnico para ${calcData.areaM2} m² con ${calcData.recommendedProduct} (${calcData.cuñetes} cuñetes y ${calcData.galones} galones) ha sido generado.`;
+
+  const htmlContent = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 620px; margin: 0 auto; background-color: #ffffff; border: 1px solid #bfdbfe; border-radius: 16px; overflow: hidden; color: #0f172a; box-shadow: 0 4px 20px rgba(37, 99, 235, 0.08);">
+      <div style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); padding: 26px; text-align: center; color: #ffffff;">
+        <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #bae6fd;">
+          CALCULADORA TÉCNICA · COLORLINK
+        </span>
+        <h1 style="font-size: 22px; font-weight: 800; margin: 8px 0 4px;">
+          Resumen de tu Cubicación Técnica
+        </h1>
+        <p style="font-size: 13px; color: #e0f2fe; margin: 0;">
+          Estimación oficial de rendimiento y galones según norma técnica
+        </p>
+      </div>
+
+      <div style="padding: 24px;">
+        <p style="font-size: 14px; color: #334155; margin: 0 0 16px;">
+          Hola <strong>${clientUser.name}</strong>, aquí tienes el resumen del cálculo técnico que acabas de realizar en tu portal ColorLink:
+        </p>
+
+        <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 12px; padding: 18px; margin-bottom: 20px;">
+          <h3 style="margin: 0 0 12px; font-size: 15px; color: #0369a1; font-weight: 700;">
+            ${calcData.recommendedProduct}
+          </h3>
+          <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <tr style="border-bottom: 1px solid #e0f2fe;">
+              <td style="padding: 8px 0; color: #64748b;">Área a Pintar:</td>
+              <td style="padding: 8px 0; font-weight: 700; color: #0f172a;">${calcData.areaM2} m² netos</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e0f2fe;">
+              <td style="padding: 8px 0; color: #64748b;">Manos Recomendadas:</td>
+              <td style="padding: 8px 0; font-weight: 700; color: #0f172a;">${calcData.coats} manos</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e0f2fe;">
+              <td style="padding: 8px 0; color: #64748b;">Volumen Sugerido:</td>
+              <td style="padding: 8px 0; font-weight: 700; color: #0369a1;">
+                ${calcData.cuñetes > 0 ? `${calcData.cuñetes} Cuñete(s) (5 gal) + ` : ''}${calcData.galones} Galón(es)
+              </td>
+            </tr>
+            ${calcData.primerName ? `
+            <tr style="border-bottom: 1px solid #e0f2fe;">
+              <td style="padding: 8px 0; color: #64748b;">Fondo / Sellador:</td>
+              <td style="padding: 8px 0; font-weight: 600; color: #0f172a;">${calcData.primerName} (${calcData.primerGalons || 1} Gal)</td>
+            </tr>` : ''}
+            <tr>
+              <td style="padding: 8px 0; color: #64748b;">Costo Estimado Material:</td>
+              <td style="padding: 8px 0; font-weight: 800; color: #16a34a; font-size: 15px;">
+                $${(calcData.estimatedCostCOP || 0).toLocaleString('es-CO')} COP
+              </td>
+            </tr>
+          </table>
+        </div>
+
+        <div style="text-align: center; margin: 24px 0 10px;">
+          <a href="${typeof window !== 'undefined' ? window.location.origin : 'https://colorlink.com'}" style="display: inline-block; background: #0284c7; color: #ffffff; text-decoration: none; font-size: 13px; font-weight: 700; padding: 12px 28px; border-radius: 10px; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);">
+            Entrar a ColorLink y Solicitar Pedido →
+          </a>
+        </div>
+      </div>
+
+      <div style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 14px 24px; text-align: center; font-size: 11px; color: #94a3b8;">
+        ColorLink S.A. · Red de Logística y Pintura Inteligente · Colombia
+      </div>
+    </div>
+  `;
+
+  return sendEmail({
+    toEmail: clientUser.email,
+    toName: clientUser.name,
+    subject,
+    previewText,
+    htmlContent,
+    category: 'general',
+    metadata: {
+      action: 'calculo_tecnico',
+      product: calcData.recommendedProduct,
+      areaM2: calcData.areaM2,
+    },
+  });
+}
+
+/**
+ * 5. Correo al Consultar al Asesor de IA sobre Pinturas
+ */
+export async function sendAiAdviceEmail(
+  question: string,
+  advice: string,
+  clientUser: UserProfile
+): Promise<EmailNotification> {
+  const subject = `🤖 Recomendación Técnica IA: ${question.slice(0, 45)}...`;
+  const previewText = `Tu asesoría técnica especializada con el Asesor IA ColorLink ha sido registrada y enviada a tu correo.`;
+
+  const htmlContent = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 620px; margin: 0 auto; background-color: #ffffff; border: 1px solid #c7d2fe; border-radius: 16px; overflow: hidden; color: #0f172a; box-shadow: 0 4px 20px rgba(99, 102, 241, 0.08);">
+      <div style="background: linear-gradient(135deg, #4338ca 0%, #3730a3 100%); padding: 26px; text-align: center; color: #ffffff;">
+        <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #c7d2fe;">
+          ASESOR INTELIGENTE · COLORLINK
+        </span>
+        <h1 style="font-size: 22px; font-weight: 800; margin: 8px 0 4px;">
+          Tu Asesoría Técnica Personalizada
+        </h1>
+        <p style="font-size: 13px; color: #e0e7ff; margin: 0;">
+          Recomendaciones de formulación, preparación de superficie y producto ideal
+        </p>
+      </div>
+
+      <div style="padding: 24px;">
+        <div style="background: #eef2ff; border-left: 4px solid #6366f1; border-radius: 0 10px 10px 0; padding: 14px 18px; margin-bottom: 20px;">
+          <span style="font-size: 11px; font-weight: 700; color: #4338ca; text-transform: uppercase; display: block; margin-bottom: 4px;">
+            Tu Consulta:
+          </span>
+          <p style="font-size: 13.5px; color: #1e1b4b; font-weight: 600; margin: 0; line-height: 1.5;">
+            "${question}"
+          </p>
+        </div>
+
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 20px;">
+          <span style="font-size: 11px; font-weight: 700; color: #4338ca; text-transform: uppercase; display: block; margin-bottom: 8px;">
+            Diagnóstico & Recomendación Técnica ColorLink:
+          </span>
+          <div style="font-size: 13px; color: #334155; line-height: 1.7; white-space: pre-wrap;">
+            ${advice}
+          </div>
+        </div>
+
+        <div style="text-align: center; margin: 24px 0 10px;">
+          <a href="${typeof window !== 'undefined' ? window.location.origin : 'https://colorlink.com'}" style="display: inline-block; background: #4f46e5; color: #ffffff; text-decoration: none; font-size: 13px; font-weight: 700; padding: 12px 28px; border-radius: 10px; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);">
+            Ir al Portal y Formular mi Pedido →
+          </a>
+        </div>
+      </div>
+
+      <div style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 14px 24px; text-align: center; font-size: 11px; color: #94a3b8;">
+        ColorLink S.A. · Sistema de Asesoría de Pintura 24/7 · Colombia
+      </div>
+    </div>
+  `;
+
+  return sendEmail({
+    toEmail: clientUser.email,
+    toName: clientUser.name,
+    subject,
+    previewText,
+    htmlContent,
+    category: 'general',
+    metadata: {
+      action: 'asesor_ia',
+      question,
+    },
+  });
+}
+
+/**
+ * 6. Correo al Enviar o Recibir Mensaje en el Chat de la Orden
+ */
+export async function sendClientChatEmail(
+  request: PaintRequest,
+  messageText: string,
+  senderRole: string,
+  clientUser: UserProfile
+): Promise<EmailNotification> {
+  const subject = `💬 Nuevo Mensaje · Orden [${request.requestCode}] ColorLink`;
+  const previewText = `Mensaje de ${senderRole === 'conductor' ? 'tu conductor' : 'soporte logístico'}: "${messageText.slice(0, 60)}"`;
+
+  const htmlContent = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 620px; margin: 0 auto; background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 16px; overflow: hidden; color: #0f172a;">
+      <div style="background: #1e293b; padding: 22px; text-align: center; color: #ffffff;">
+        <span style="font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase;">
+          TRAZABILIDAD EN TIEMPO REAL · COLORLINK
+        </span>
+        <h2 style="font-size: 20px; font-weight: 800; margin: 6px 0 0;">
+          Mensaje de Seguimiento · Pedido ${request.requestCode}
+        </h2>
+      </div>
+
+      <div style="padding: 22px;">
+        <p style="font-size: 13.5px; color: #475569; margin: 0 0 14px;">
+          Hola <strong>${clientUser.name}</strong>, se ha registrado una nueva comunicación en el chat de tu pedido:
+        </p>
+
+        <div style="background: #f1f5f9; border-left: 4px solid #3b82f6; border-radius: 0 8px 8px 0; padding: 14px 18px; margin-bottom: 18px;">
+          <span style="font-size: 11px; font-weight: 700; color: #1d4ed8; text-transform: uppercase; display: block; margin-bottom: 4px;">
+            ${senderRole === 'conductor' ? `Conductor (${request.deliveryDetails?.driverName || 'Transportador'})` : 'Mensaje Registrado'}:
+          </span>
+          <p style="font-size: 14px; color: #0f172a; font-weight: 600; margin: 0;">
+            "${messageText}"
+          </p>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; font-size: 12.5px; color: #64748b; margin-bottom: 18px;">
+          <tr>
+            <td style="padding: 6px 0;">Código de Orden:</td>
+            <td style="padding: 6px 0; font-weight: 700; color: #0f172a;">${request.requestCode}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0;">Destino de Entrega:</td>
+            <td style="padding: 6px 0; font-weight: 600; color: #0f172a;">${request.deliveryAddress} (${request.city})</td>
+          </tr>
+        </table>
+
+        <div style="text-align: center; margin: 20px 0 6px;">
+          <a href="${typeof window !== 'undefined' ? window.location.origin : 'https://colorlink.com'}" style="display: inline-block; background: #2563eb; color: #ffffff; text-decoration: none; font-size: 13px; font-weight: 700; padding: 11px 24px; border-radius: 10px;">
+            Abrir Chat en ColorLink →
+          </a>
+        </div>
+      </div>
+    </div>
+  `;
+
+  return sendEmail({
+    toEmail: clientUser.email || request.clientEmail,
+    toName: clientUser.name || request.clientName,
+    subject,
+    previewText,
+    htmlContent,
+    category: 'general',
+    requestCode: request.requestCode,
+    metadata: {
+      action: 'chat_message',
+      message: messageText,
+    },
+  });
+}
+
+/**
+ * 7. Correo al Consultar / Descargar Factura DIAN o Certificado de Garantía
+ */
+export async function sendInvoiceCertificateEmail(
+  request: PaintRequest,
+  docType: 'factura' | 'certificado',
+  clientUser: UserProfile
+): Promise<EmailNotification> {
+  const isInvoice = docType === 'factura';
+  const subject = isInvoice
+    ? `📄 Tu Factura Electrónica DIAN · Orden [${request.requestCode}]`
+    : `🛡️ Tu Certificado Oficial de Calidad 5 Años · Orden [${request.requestCode}]`;
+
+  const previewText = isInvoice
+    ? `Comprobante tributario oficial de tu orden ${request.requestCode} en ColorLink S.A.`
+    : `Certificado oficial de garantía técnica de 5 años para tu orden ${request.requestCode}.`;
+
+  const htmlContent = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 620px; margin: 0 auto; background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 16px; overflow: hidden; color: #0f172a;">
+      <div style="background: ${isInvoice ? '#0f766e' : '#1e3a8a'}; padding: 26px; text-align: center; color: #ffffff;">
+        <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #ccfbf1;">
+          DOCUMENTO OFICIAL · COLORLINK S.A.
+        </span>
+        <h1 style="font-size: 21px; font-weight: 800; margin: 6px 0 2px;">
+          ${isInvoice ? 'Factura Electrónica DIAN' : 'Certificado de Calidad & Garantía 5 Años'}
+        </h1>
+        <p style="font-size: 13px; color: #f0fdfa; margin: 0;">
+          Orden ${request.requestCode} · ${request.catalogProductName || 'Recubrimientos Pintuco'}
+        </p>
+      </div>
+
+      <div style="padding: 24px;">
+        <p style="font-size: 14px; color: #334155; margin: 0 0 16px;">
+          Estimado(a) <strong>${clientUser.name}</strong>, adjuntamos la información formal del documento emitido para tu orden:
+        </p>
+
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 20px;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+              <td style="padding: 8px 0; color: #64748b;">Número de Orden:</td>
+              <td style="padding: 8px 0; font-weight: 700; color: #0f172a;">${request.requestCode}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+              <td style="padding: 8px 0; color: #64748b;">Cliente / NIT:</td>
+              <td style="padding: 8px 0; font-weight: 600; color: #0f172a;">${clientUser.name} · ${clientUser.email}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+              <td style="padding: 8px 0; color: #64748b;">Producto Certificado:</td>
+              <td style="padding: 8px 0; font-weight: 600; color: #0f172a;">${request.catalogProductName || 'Pintura Viniltex / Koraza'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #64748b;">Garantía Aplicable:</td>
+              <td style="padding: 8px 0; font-weight: 700; color: #16a34a;">5 AÑOS DE RESPALDO OFICIAL</td>
+            </tr>
+          </table>
+        </div>
+
+        <div style="text-align: center; margin: 24px 0 10px;">
+          <a href="${typeof window !== 'undefined' ? window.location.origin : 'https://colorlink.com'}" style="display: inline-block; background: ${isInvoice ? '#0f766e' : '#1e3a8a'}; color: #ffffff; text-decoration: none; font-size: 13px; font-weight: 700; padding: 12px 28px; border-radius: 10px;">
+            Ver Documento en Portal ColorLink →
+          </a>
+        </div>
+      </div>
+    </div>
+  `;
+
+  return sendEmail({
+    toEmail: clientUser.email || request.clientEmail,
+    toName: clientUser.name || request.clientName,
+    subject,
+    previewText,
+    htmlContent,
+    category: 'general',
+    requestCode: request.requestCode,
+    metadata: {
+      action: isInvoice ? 'factura_dian' : 'certificado_calidad',
     },
   });
 }

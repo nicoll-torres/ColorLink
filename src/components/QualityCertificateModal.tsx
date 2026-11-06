@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { PaintRequest } from '../types';
 import { ShieldCheck, CheckCircle2, FileText, LogoMark } from '../icons';
+import { sendInvoiceCertificateEmail } from '../emailService';
 
 interface QualityCertificateModalProps {
   request: PaintRequest;
@@ -13,6 +14,25 @@ export const QualityCertificateModal: React.FC<QualityCertificateModalProps> = (
 }) => {
   const calc = request.technicalCalculation;
   const cert = request.qualityCertificate;
+
+  useEffect(() => {
+    if (request.clientEmail) {
+      sendInvoiceCertificateEmail(
+        request,
+        'certificado',
+        {
+          id: request.clientId || 'client',
+          name: request.clientName || 'Cliente',
+          email: request.clientEmail,
+          password: '',
+          phone: request.clientPhone || '',
+          company: request.clientCompany || 'Cliente',
+          role: 'cliente',
+          city: request.city || 'Medellín',
+        }
+      ).catch(console.warn);
+    }
+  }, [request.id, request.clientEmail]);
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-hidden">

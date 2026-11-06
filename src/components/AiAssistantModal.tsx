@@ -22,10 +22,12 @@ import {
   Zap,
   Tag,
   Boxes,
+  Mail,
 } from '../icons';
 import { PINTUCO_PRODUCTS, PINTUCO_WAREHOUSES, calculatePintucoSystem, PINTUCO_INVENTORY } from '../data';
 import { OFFICIAL_IMAGES } from '../productImages';
 import { SurfaceType, UserProfile, PintucoProduct, WarehouseInventoryItem } from '../types';
+import { sendAiAdviceEmail } from '../emailService';
 
 interface Message {
   id: string;
@@ -303,6 +305,10 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
           detectedProducts: detected.length > 0 ? detected : undefined,
         },
       ]);
+
+      if (currentUser?.email && currentUser.role === 'cliente') {
+        sendAiAdviceEmail(query, replyText, currentUser).catch(console.warn);
+      }
     } catch (err: any) {
       console.warn('API call failed, running dynamic rule-based advisor:', err);
       // Generate rich dynamic answer as fallback
@@ -319,6 +325,10 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
           detectedProducts: detected.length > 0 ? detected : undefined,
         },
       ]);
+
+      if (currentUser?.email && currentUser.role === 'cliente') {
+        sendAiAdviceEmail(query, fallbackReply, currentUser).catch(console.warn);
+      }
     } finally {
       setIsTyping(false);
     }

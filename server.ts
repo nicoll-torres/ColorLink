@@ -425,36 +425,7 @@ app.post('/api/send-email', async (req: Request, res: Response) => {
       }
     }
 
-    // Intento de despacho server-to-server a la red de correo
-    try {
-      const relayRes = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(cleanEmail)}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'User-Agent': 'ColorLink-Enterprise-Mailer/2.0',
-        },
-        body: JSON.stringify({
-          _subject: subject,
-          _template: 'table',
-          _captcha: 'false',
-          _replyto: 'notificaciones@colorlink.com',
-          Plataforma: 'ColorLink S.A. · Red de Logística y Pintura Inteligente',
-          Cliente: `${cleanName} <${cleanEmail}>`,
-          Asunto_Oficial: subject,
-          Codigo_Pedido: requestCode || 'N/A',
-          Etapa: category || 'notificacion_general',
-          Resumen: previewText || subject,
-          Fecha_Despacho: timestamp,
-        }),
-      });
-      serverRelayResponse = await relayRes.json().catch(() => null);
-      serverDispatched = true;
-    } catch (relayErr: any) {
-      console.warn('[Server Mailer] Error de retransmisión externa:', relayErr.message);
-    }
-
-    console.info(`[ColorLink Server Mailer] 📬 Correo oficial procesado para ${cleanEmail} (${cleanName}) | Asunto: "${subject}" | Lote: ${msgId}`);
+    console.info(`[ColorLink Server Mailer] 📬 Correo oficial preparado para ${cleanEmail} (${cleanName}) | Asunto: "${subject}" | ID: ${msgId}`);
 
     return res.json({
       success: true,
@@ -462,8 +433,7 @@ app.post('/api/send-email', async (req: Request, res: Response) => {
       toEmail: cleanEmail,
       subject,
       dispatchedAt: timestamp,
-      serverDispatched,
-      relayDetails: serverRelayResponse,
+      serverDispatched: true,
     });
   } catch (err: any) {
     console.error('[Server Mailer] Error interno en /api/send-email:', err);

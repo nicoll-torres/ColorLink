@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { SurfaceType, PintucoProduct } from '../types';
+import { SurfaceType, PintucoProduct, UserProfile } from '../types';
 import { PINTUCO_PRODUCTS, calculatePintucoSystem } from '../data';
+import { sendCalculationEmail } from '../emailService';
 import {
   Paintbrush,
   Layers,
@@ -11,17 +12,23 @@ import {
   Sparkles,
   ArrowRight,
   Sliders,
+  Mail,
+  Check,
 } from '../icons';
 
 interface TechnicalCalculatorProps {
   onApplyCalculationToRequest?: (surface: SurfaceType, areaM2: number) => void;
   onClose: () => void;
+  currentUser?: UserProfile | null;
 }
 
 export const TechnicalCalculator: React.FC<TechnicalCalculatorProps> = ({
   onApplyCalculationToRequest,
   onClose,
+  currentUser,
 }) => {
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [emailSentSuccess, setEmailSentSuccess] = useState(false);
   const [calculationMode, setCalculationMode] = useState<'area' | 'dimensions'>('dimensions');
   const [wallWidth, setWallWidth] = useState<number>(4);
   const [wallHeight, setWallHeight] = useState<number>(2.6);
@@ -245,15 +252,79 @@ export const TechnicalCalculator: React.FC<TechnicalCalculatorProps> = ({
             </div>
           </div>
 
-          <div className="mt-5 pt-3 border-t border-white/15 flex gap-2">
+          <div className="mt-4 pt-3 border-t border-white/15 flex flex-col sm:flex-row gap-2">
+            {currentUser?.email && (
+              <button
+                type="button"
+                disabled={isSendingEmail}
+                onClick={async () => {
+                  setIsSendingEmail(true);
+                  try {
+                    await sendCalculationEmail(
+                      {
+                        surfaceType,
+                        areaM2: computedArea,
+                        coats: calculation.handsNeeded,
+                        recommendedProduct: calculation.recommendedProduct.name,
+                        cuñetes: calculation.totalCuñetes,
+                        galones: calculation.remainderGalons,
+                        estimatedCostCOP: calculation.estimatedMaterialCostCOP,
+                        primerName: calculation.recommendedPrimerProduct?.name,
+                        primerGalons: calculation.primerGalons,
+                      },
+                      currentUser
+                    );
+                    setEmailSentSuccess(true);
+                    setTimeout(() => setEmailSentSuccess(false), 3000);
+                  } catch (err) {
+                    console.error('Error sending calculation email:', err);
+                  } finally {
+                    setIsSendingEmail(false);
+                  }
+                }}
+                className="py-2.5 px-3.5 rounded-xl text-xs font-bold bg-white/15 hover:bg-white/25 text-white flex items-center justify-center gap-2 border border-white/20 transition-all cursor-pointer"
+                title={`Enviar este cálculo oficial a ${currentUser.email}`}
+              >
+                {emailSentSuccess ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="text-emerald-300">¡Enviado a tu correo!</span>
+                  </>
+                ) : (
+                  <>
+                    <Mail className="w-3.5 h-3.5 text-teal-300" />
+                    <span>{isSendingEmail ? 'Enviando...' : '✉️ Enviar a mi correo'}</span>
+                  </>
+                )}
+              </button>
+            )}
+
             {onApplyCalculationToRequest && (
               <button
                 type="button"
                 id="btn-apply-calc-to-request"
-                onClick={() => onApplyCalculationToRequest(surfaceType, computedArea)}
-                className="w-full py-3.5 px-4 rounded-xl font-black text-xs bg-emerald-500 hover:bg-emerald-400 text-slate-950 flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer active:scale-95"
+                onClick={() => {
+                  if (currentUser?.email) {
+                    sendCalculationEmail(
+                      {
+                        surfaceType,
+                        areaM2: computedArea,
+                        coats: calculation.handsNeeded,
+                        recommendedProduct: calculation.recommendedProduct.name,
+                        cuñetes: calculation.totalCuñetes,
+                        galones: calculation.remainderGalons,
+                        estimatedCostCOP: calculation.estimatedMaterialCostCOP,
+                        primerName: calculation.recommendedPrimerProduct?.name,
+                        primerGalons: calculation.primerGalons,
+                      },
+                      currentUser
+                    ).catch(console.warn);
+                  }
+                  onApplyCalculationToRequest(surfaceType, computedArea);
+                }}
+                className="flex-1 py-3 px-4 rounded-xl font-black text-xs bg-emerald-500 hover:bg-emerald-400 text-slate-950 flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer active:scale-95"
               >
-                <span>🎨 Crear Nueva Pintura con este Cálculo ({computedArea} m²)</span>
+                <span>🎨 Crear Pedido con este Cálculo ({computedArea} m²)</span>
                 <ArrowRight className="w-4 h-4 text-slate-950" />
               </button>
             )}

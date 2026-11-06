@@ -9,6 +9,9 @@ import { sendChatMessageToServer } from '../syncService';
 import { cloudSendChatMessage, cloudSyncRequest } from '../cloudSync';
 import {
   getEmailsForUser,
+  sendWelcomeEmail,
+  sendClientChatEmail,
+  sendInvoiceCertificateEmail,
   openInGmail,
   openInEmailClient,
   openInOutlook,
@@ -165,6 +168,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
     }
     cloudSendChatMessage(requestId, newMsg).catch(console.warn);
     sendChatMessageToServer(requestId, newMsg).catch(console.warn);
+    sendClientChatEmail(updatedReq, trimmed, 'cliente', currentUser).catch(console.warn);
     try {
       window.dispatchEvent(
         new CustomEvent('colorlink-order-chat-updated', {
@@ -185,10 +189,19 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
 
   // Lista de correos del cliente actual
   const [userEmails, setUserEmails] = useState(() => getEmailsForUser(currentUser.email));
+  const [isSendingWelcome, setIsSendingWelcome] = useState(false);
 
   useEffect(() => {
     const handleEmails = () => {
-      setUserEmails(getEmailsForUser(currentUser.email));
+      const current = getEmailsForUser(currentUser.email);
+      setUserEmails(current);
+      // Si el cliente no tiene correo de bienvenida registrado en su buzón, despacharlo automáticamente
+      if (currentUser.role === 'cliente' && currentUser.email) {
+        const hasWelcome = current.some((e) => e.category === 'bienvenida');
+        if (!hasWelcome) {
+          sendWelcomeEmail(currentUser).catch(console.error);
+        }
+      }
     };
     handleEmails();
     window.addEventListener('colorlink-email-sent', handleEmails);
@@ -199,7 +212,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
       window.removeEventListener('colorlink-email-read', handleEmails);
       window.removeEventListener('colorlink-email-deleted', handleEmails);
     };
-  }, [currentUser.email]);
+  }, [currentUser.email, currentUser.role]);
 
   const [selectedCatalogItem, setSelectedCatalogItem] = useState<WarehouseInventoryItem | null>(() => {
     if (initialPendingData?.catalogItem) return initialPendingData.catalogItem;
@@ -2344,6 +2357,24 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({
                 </p>
               </div>
               <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+                <button
+                  type="button"
+                  disabled={isSendingWelcome}
+                  onClick={async () => {
+                    setIsSendingWelcome(true);
+                    try {
+                      await sendWelcomeEmail(currentUser);
+                    } finally {
+                      setTimeout(() => setIsSendingWelcome(false), 800);
+                    }
+                  }}
+                  className="px-4 py-2 bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs flex items-center gap-2 cursor-pointer shadow-xs transition-colors"
+                  id="btn-send-welcome-email-now"
+                >
+                  <Mail className="w-4 h-4" />
+                  <span>{isSendingWelcome ? 'Enviando correo...' : '✉️ Enviar mi Correo Oficial de Bienvenida'}</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => setActiveTab('nueva_solicitud')}

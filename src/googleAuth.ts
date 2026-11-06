@@ -21,8 +21,14 @@ provider.setCustomParameters({
   prompt: 'select_account',
 });
 
-// Guardado del token de acceso en memoria (NUNCA en localStorage/sessionStorage)
-let cachedAccessToken: string | null = null;
+// Guardado del token de acceso con respaldo en sessionStorage para mantener la sesión activa
+let cachedAccessToken: string | null = (() => {
+  try {
+    return sessionStorage.getItem('colorlink_google_access_token');
+  } catch {
+    return null;
+  }
+})();
 let isSigningIn = false;
 
 // Observador de estado de autenticación
@@ -35,11 +41,22 @@ export const initAuth = (
       if (cachedAccessToken) {
         if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
       } else if (!isSigningIn) {
-        // El usuario está logueado en Firebase pero el access token en memoria expiró o no está cargado
+        // Intentar recuperar de sessionStorage si existe
+        try {
+          const stored = sessionStorage.getItem('colorlink_google_access_token');
+          if (stored) {
+            cachedAccessToken = stored;
+            if (onAuthSuccess) onAuthSuccess(user, stored);
+            return;
+          }
+        } catch {}
         if (onAuthFailure) onAuthFailure();
       }
     } else {
       cachedAccessToken = null;
+      try {
+        sessionStorage.removeItem('colorlink_google_access_token');
+      } catch {}
       if (onAuthFailure) onAuthFailure();
     }
   });
@@ -56,6 +73,9 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
     }
 
     cachedAccessToken = credential.accessToken;
+    try {
+      sessionStorage.setItem('colorlink_google_access_token', credential.accessToken);
+    } catch {}
     return { user: result.user, accessToken: cachedAccessToken };
   } catch (error: any) {
     console.error('Error al iniciar sesión con Google:', error);
@@ -65,8 +85,13 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
   }
 };
 
-// Obtener el token de acceso en memoria
+// Obtener el token de acceso en memoria o sesión
 export const getAccessToken = async (): Promise<string | null> => {
+  if (!cachedAccessToken) {
+    try {
+      cachedAccessToken = sessionStorage.getItem('colorlink_google_access_token');
+    } catch {}
+  }
   return cachedAccessToken;
 };
 
@@ -90,6 +115,10 @@ export const isGoogleConnected = (): boolean => {
 // Establecer manualmente el token en memoria si se renovó
 export const setCachedAccessToken = (token: string | null) => {
   cachedAccessToken = token;
+  try {
+    if (token) sessionStorage.setItem('colorlink_google_access_token', token);
+    else sessionStorage.removeItem('colorlink_google_access_token');
+  } catch {}
 };
 
 // Cerrar sesión
@@ -100,5 +129,8 @@ export const googleLogout = async (): Promise<void> => {
     console.warn('Error al cerrar sesión de Google:', err);
   } finally {
     cachedAccessToken = null;
+    try {
+      sessionStorage.removeItem('colorlink_google_access_token');
+    } catch {}
   }
 };

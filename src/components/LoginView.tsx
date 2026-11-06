@@ -16,7 +16,12 @@ import {
   Send,
 } from '../icons';
 import { getSupabaseClient } from '../supabase';
-import { sendPasswordRecoveryEmail, buildGmailComposeUrl } from '../emailService';
+import {
+  sendPasswordRecoveryEmail,
+  buildGmailComposeUrl,
+  sendWelcomeEmail,
+  getEmailsForUser,
+} from '../emailService';
 import { googleSignIn } from '../googleAuth';
 import { fetchCloudUsers, fetchCloudClients } from '../cloudSync';
 
@@ -152,6 +157,15 @@ export const LoginView: React.FC<LoginViewProps> = ({
       try {
         localStorage.setItem('colorlink_users', JSON.stringify(updatedUsers));
       } catch {}
+
+      // Si el usuario autenticado con Google tiene rol de cliente, asegurar correo oficial de bienvenida
+      if (user.role === 'cliente') {
+        const existingEmails = getEmailsForUser(user.email);
+        const hasWelcome = existingEmails.some((e) => e.category === 'bienvenida');
+        if (!hasWelcome) {
+          sendWelcomeEmail(user).catch(console.error);
+        }
+      }
 
       setIsLoading(false);
       onLogin(user);
@@ -511,6 +525,14 @@ export const LoginView: React.FC<LoginViewProps> = ({
           updatedUsers.unshift(loggedInUser);
           localStorage.setItem('colorlink_users', JSON.stringify(updatedUsers));
 
+          if (loggedInUser.role === 'cliente') {
+            const existingEmails = getEmailsForUser(loggedInUser.email);
+            const hasWelcome = existingEmails.some((e) => e.category === 'bienvenida');
+            if (!hasWelcome) {
+              sendWelcomeEmail(loggedInUser).catch(console.error);
+            }
+          }
+
           setIsLoading(false);
           onLogin(loggedInUser);
           return;
@@ -534,6 +556,14 @@ export const LoginView: React.FC<LoginViewProps> = ({
         setIsLoading(false);
         setError('Contraseña incorrecta. Verifique la clave ingresada.');
         return;
+      }
+
+      if (matchedUser.role === 'cliente') {
+        const existingEmails = getEmailsForUser(matchedUser.email);
+        const hasWelcome = existingEmails.some((e) => e.category === 'bienvenida');
+        if (!hasWelcome) {
+          sendWelcomeEmail(matchedUser).catch(console.error);
+        }
       }
 
       setIsLoading(false);
